@@ -10,8 +10,10 @@ class MultipeerManager: NSObject, ObservableObject {
     private var advertiser: MCNearbyServiceAdvertiser!
     private var browser: MCNearbyServiceBrowser!
     
-    @Published var connectionStatus: String = "Disconnected"
-    @Published var receivedMessage: String = "No messages yet"
+    
+    @Published var connectedPeers: [MCPeerID] = []
+    
+    var onPacketReceived: ((Data) -> Void)?
     
     override init() {
         super.init()
@@ -28,7 +30,6 @@ class MultipeerManager: NSObject, ObservableObject {
     func startNetworking() {
         advertiser.startAdvertisingPeer()
         browser.startBrowsingForPeers()
-        connectionStatus = "Scanning..."
     }
     
     func broadcastToNeighbors(data: Data) {
@@ -52,24 +53,27 @@ extension MultipeerManager: MCSessionDelegate, MCNearbyServiceAdvertiserDelegate
     }
     
     func session(_ session: MCSession, didReceive data: Data, fromPeer peerID: MCPeerID) {
-        // Decode the bytes back into a string and push it to the UI
-        if let text = String(data: data, encoding: .utf8) {
-            DispatchQueue.main.async {
-                self.receivedMessage = text
-            }
-        }
+        print("Layer 4: Caught \(data.count) raw bytes from \(peerID.displayName)")
+            
+        onPacketReceived?(data)
     }
     
     func session(_ session: MCSession, peer peerID: MCPeerID, didChange state: MCSessionState) {
-        // Update the UI when someone connects or disconnects
         DispatchQueue.main.async {
             switch state {
             case .connected:
-                self.connectionStatus = "Connected to \(peerID.displayName)!"
-            case .connecting:
-                self.connectionStatus = "Connecting..."
+                if !self.connectedPeers.contains(peerID) {
+                    self.connectedPeers.append(peerID)
+                    print("Layer 4: \(peerID.displayName) joined the mesh!")
+                }
+                
             case .notConnected:
-                self.connectionStatus = "Disconnected"
+                self.connectedPeers.removeAll { $0 == peerID }
+                print("Layer 4: \(peerID.displayName) disconnected.")
+                
+            case .connecting:
+                print("Layer 4: Handshaking with \(peerID.displayName)...")
+                
             @unknown default:
                 break
             }
@@ -79,5 +83,9 @@ extension MultipeerManager: MCSessionDelegate, MCNearbyServiceAdvertiserDelegate
     func session(_ session: MCSession, didReceive stream: InputStream, withName streamName: String, fromPeer peerID: MCPeerID) {}
     func session(_ session: MCSession, didStartReceivingResourceWithName resourceName: String, fromPeer peerID: MCPeerID, with progress: Progress) {}
     func session(_ session: MCSession, didFinishReceivingResourceWithName resourceName: String, fromPeer peerID: MCPeerID, at localURL: URL?, withError error: Error?) {}
-    func browser(_ browser: MCNearbyServiceBrowser, lostPeer peerID: MCPeerID) {}
+    func browser(_ browser: MCNearbyServiceBrowser, lostPeer peerID: MCPeerID) {
+        print("Layer 4 Warning: The scanner lost sight of \(peerID.displayName).")
+    }
+    
+    
 }

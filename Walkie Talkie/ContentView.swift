@@ -1,6 +1,8 @@
 import SwiftUI
 import MultipeerConnectivity
 
+
+//I wrote this ui to test layer 4 stuff, yall can change whatever.
 struct ContentView: View {
     @StateObject var networkManager = MultipeerManager()
     

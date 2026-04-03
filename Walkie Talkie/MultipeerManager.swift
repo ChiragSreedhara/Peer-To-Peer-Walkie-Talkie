@@ -1,3 +1,38 @@
+// LAYER 4: NETWORK TRANSPORT LAYER (MPC Manager)
+//
+// This module manages the physical/link-layer connections between iOS devices.
+// It uses Apple's Multipeer Connectivity to automatically discover and connect to nearby peers in an ad-hoc mesh, without
+// the need for a central router, cell tower, or internet connection.
+// 
+// This layer operates strictly as a data pipe. It ONLY deals with raw `Data`.
+// It does NOT know what an audio packet is. It does NOT decode strings. It does
+// NOT make routing decisions. It has zero knowledge of the Layer 3 Mesh topology.
+// 
+// HOW TO USE THIS MODULE (for whoever works on layer 3)
+//
+//    Create an instance of this manager in your Layer 3 Router class:
+//    `let transport = MultipeerManager()`
+// 
+//    Hook into the `onPacketReceived` closure. This fires instantly on a
+//    background thread whenever raw bytes hit the phone's antenna.
+//    
+//    transport.onPacketReceived = { rawBytes in
+//        // Layer 3 takes over here: Decode the Opus packet, check the TTL,
+//        // read the Message ID, and decide whether to drop or forward it.
+//    }
+// 
+//    Call `transport.startNetworking()` to turn on the Bluetooth beacons and
+//    begin automatically connecting to nearby users.
+// 
+//    When Layer 3 decides a packet needs to be forwarded, seal it into `Data`
+//    and call `transport.broadcastToNeighbors(data: yourSealedBytes)`.
+//    *Note: This blasts the data to ALL immediately connected adjacent nodes.*
+// 
+//     to know who is physically next to us check `transport.connectedPeers`.
+//    This is dynamically updated as users walk in and out of Bluetooth range.
+// 
+
+
 import MultipeerConnectivity
 import Foundation
 import Combine

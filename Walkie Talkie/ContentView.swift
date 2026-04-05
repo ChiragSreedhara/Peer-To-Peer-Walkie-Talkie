@@ -1,10 +1,10 @@
 import SwiftUI
 import MultipeerConnectivity
+import Combine
 
 
-//I wrote this ui to test layer 4 stuff, yall can change whatever.
 struct ContentView: View {
-    @StateObject var networkManager = MultipeerManager()
+    @StateObject var networkManager = MeshRoutingEngine()
     
     @State private var messageToSend: String = ""
     @State private var receivedMessage: String = "No messages yet"
@@ -19,9 +19,8 @@ struct ContentView: View {
                     .font(.headline)
                     .foregroundColor(networkManager.connectedPeers.isEmpty ? .red : .green)
                 
-                // Loop through the array and list everyone's name!
-                ForEach(networkManager.connectedPeers, id: \.self) { peer in
-                    Text("📱 \(peer.displayName)")
+                ForEach(networkManager.connectedPeers, id: \.self) { peerName in
+                    Text("📱 \(peerName)")
                         .foregroundColor(.blue)
                 }
             }
@@ -45,7 +44,7 @@ struct ContentView: View {
                 Button("Send") {
                     guard !messageToSend.isEmpty else { return }
                     if let rawBytes = messageToSend.data(using: .utf8) {
-                        networkManager.broadcastToNeighbors(data: rawBytes)
+                        networkManager.broadcast(payload: rawBytes)
                         messageToSend = ""
                     }
                 }
@@ -56,19 +55,18 @@ struct ContentView: View {
             Spacer()
             
             Button("Start Scanning for Peers") {
-                networkManager.startNetworking()
+                networkManager.startMesh()
             }
             .buttonStyle(.bordered)
             .padding(.bottom)
         }
         .padding(.top)
 
-        //delete this section once layer 3 is done
         .onAppear {
-            networkManager.onPacketReceived = { rawData in
-                if let decodedText = String(data: rawData, encoding: .utf8) {
+            networkManager.onPayloadReceived = { payloadData, senderName in
+                if let decodedText = String(data: payloadData, encoding: .utf8) {
                     DispatchQueue.main.async {
-                        self.receivedMessage = decodedText
+                        self.receivedMessage = "[\(senderName)]: \(decodedText)"
                     }
                 }
             }

@@ -1,6 +1,6 @@
 /*
  ============================================================================
- LAYER 4: NETWORK TRANSPORT LAYER (THE "DUMB PIPE")
+ LAYER 4: NETWORK TRANSPORT LAYER
  ============================================================================
  */
 
@@ -19,8 +19,7 @@ class MultipeerManager: NSObject, ObservableObject {
     
     private var ignoreList: [String] = []
     
-    // THIS IS THE VARIABLE XCODE WAS LOOKING FOR!
-    // Safety lock to prevent the app from crashing during a Soft Heal
+   
     private var isRestartingScanner = false
     
     @Published var connectedPeers: [MCPeerID] = []
@@ -36,7 +35,6 @@ class MultipeerManager: NSObject, ObservableObject {
         self.myPeerId = MCPeerID(displayName: name)
         self.ignoreList = ignoring
         
-        // Encryption OFF (.none) for maximum healing speed
         session = MCSession(peer: myPeerId, securityIdentity: nil, encryptionPreference: .none)
         session.delegate = self
         
@@ -64,22 +62,16 @@ class MultipeerManager: NSObject, ObservableObject {
         }
     }
     
-    // Completely destroys the poisoned session and creates a fresh one
     private func rebuildSession() {
-        // 1. Kill the old, corrupted session
         session.disconnect()
         
-        // 2. Stop the radios
         advertiser.stopAdvertisingPeer()
         browser.stopBrowsingForPeers()
         
-        // 3. Give the hardware a split second to clear its cache
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            // 4. Create a brand new session from scratch
             self.session = MCSession(peer: self.myPeerId, securityIdentity: nil, encryptionPreference: .none)
             self.session.delegate = self
             
-            // 5. Fire the radios back up
             self.advertiser.startAdvertisingPeer()
             self.browser.startBrowsingForPeers()
             
@@ -95,7 +87,6 @@ extension MultipeerManager: MCSessionDelegate, MCNearbyServiceAdvertiserDelegate
         
         if myPeerId.hashValue > peerID.hashValue {
             onDebugLog?("Layer 4: Found \(peerID.displayName). Priority high, inviting...")
-            // Timeout bumped to 30 for long-distance handshakes
             browser.invitePeer(peerID, to: session, withContext: nil, timeout: 30)
         } else {
             onDebugLog?("Layer 4: Found \(peerID.displayName). Yielding invite priority.")
@@ -129,12 +120,10 @@ extension MultipeerManager: MCSessionDelegate, MCNearbyServiceAdvertiserDelegate
                 self.connectedPeers.removeAll { $0 == peerID }
                 self.onDebugLog?("Layer 4: 🔴 \(peerID.displayName) disconnected.")
                 
-                // THE ZERO-PEER REBUILD LOGIC
                 if self.connectedPeers.isEmpty {
                     self.onDebugLog?("Layer 4: ⚠️ Isolated! Poisoned session detected. Rebuilding from scratch...")
                     self.rebuildSession()
                 } else if !self.isRestartingScanner {
-                    // THE SOFT HEAL LOGIC
                     self.isRestartingScanner = true
                     DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
                         self.browser.stopBrowsingForPeers()

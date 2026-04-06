@@ -15,7 +15,6 @@ struct ContentView: View {
     var body: some View {
         VStack(spacing: 15) {
             
-            // --- HEADER: SETUP ---
             if !isMeshStarted {
                 VStack {
                     TextField("Enter your name", text: $userName)
@@ -46,7 +45,6 @@ struct ContentView: View {
                 }
             }
             
-            // --- PEERS ---
             VStack {
                 Text("Connected Adjacent Peers: \(networkManager.connectedPeers.count)")
                     .font(.subheadline)
@@ -61,7 +59,6 @@ struct ContentView: View {
                 }
             }
             
-            // --- LIVE DEBUG CONSOLE ---
             VStack(alignment: .leading) {
                 Text("System Logs:")
                     .font(.caption)
@@ -85,7 +82,6 @@ struct ContentView: View {
             }
             .padding(.horizontal)
             
-            // --- MESSAGING UI ---
             VStack(alignment: .leading) {
                 Text("Chat Inbox:")
                     .font(.caption)
@@ -99,7 +95,6 @@ struct ContentView: View {
             }
             .padding(.horizontal)
             
-            // --- SENDING ---
             VStack(spacing: 10) {
                 HStack {
                     Text("Send to:")

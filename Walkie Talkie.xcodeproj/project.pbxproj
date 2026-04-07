@@ -284,7 +284,9 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				"HEADER_SEARCH_PATHS[arch=*]" = "$(BUILD_DIR)/../../SourcePackages/checkouts";
 				INFOPLIST_FILE = "Walkie-Talkie-Info.plist";
+				INFOPLIST_KEY_LSApplicationCategoryType = "";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "We need this to discover nearby walkie-talkie users.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "This app requires microphone access to send voice messages over the mesh network";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -335,7 +337,9 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				"HEADER_SEARCH_PATHS[arch=*]" = "$(BUILD_DIR)/../../SourcePackages/checkouts";
 				INFOPLIST_FILE = "Walkie-Talkie-Info.plist";
+				INFOPLIST_KEY_LSApplicationCategoryType = "";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "We need this to discover nearby walkie-talkie users.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "This app requires microphone access to send voice messages over the mesh network";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;

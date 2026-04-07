@@ -1,164 +1,129 @@
-//
-//  AudioPipelineEngine.swift
-//  Walkie Talkie
-//
-//  Created by Nicole Li on 4/5/26.
-//
-//
-//  Audio Processing Layer - Main Engine
-//
-//  This class sits between the UI (push-to-talk button) and the Mesh Routing
-//  Engine (Layer 3). It handles:
-//
-//    SEND PATH:  Mic → AVAudioEngine tap → Opus encode → AudioPacket → serialize → mesh
-//    RECV PATH:  mesh → deserialize → JitterBuffer → Opus decode → AVAudioPlayerNode → speaker
-//
-//  Usage from the UI / ContentView:
-//
-//    let audio = AudioPipelineEngine()
-//    audio.onAudioPacketReady = { packetData in
-//        meshRouter.broadcast(payload: packetData)
-//    }
-//
-//    // When push-to-talk button is pressed:
-//    audio.startTransmitting()
-//
-//    // When push-to-talk button is released:
-//    audio.stopTransmitting()
-//
-//    // When a payload arrives from the mesh:
-//    audio.receiveAudioData(payloadData, from: senderName)
-//
-
 import AVFoundation
 import UIKit
 import Combine
 
 final class AudioPipelineEngine: ObservableObject {
     
-    // MARK: - Public State
-    
-    /// True while the mic is hot and we're sending audio.
     @Published private(set) var isTransmitting = false
-    
-    /// True while we're actively playing back received audio.
     @Published private(set) var isReceiving = false
     
-    /// Callback: hand serialized AudioPacket bytes to the mesh layer for broadcast.
     var onAudioPacketReady: ((Data) -> Void)?
-    
-    // MARK: - Audio Engine Components
     
     private let captureEngine = AVAudioEngine()
     private let playbackEngine = AVAudioEngine()
     private let playerNode = AVAudioPlayerNode()
     
-    // MARK: - Codec & Buffer
-    
     private let codec: AudioCodec = OpusCodecWrapper()
-    private var jitterBuffers: [String: JitterBuffer] = [:]  // per-sender
+    private var jitterBuffers: [String: JitterBuffer] = [:]
     
-    // MARK: - Sequencing
+    private var leftoverSamples: [Float] = []
+    private let audioQueue = DispatchQueue(label: "com.walkietalkie.audio", qos: .userInteractive)
     
     private var sequenceCounter: UInt32 = 0
-    
-    // MARK: - Playback Timer
-    
     private var playbackTimer: DispatchSourceTimer?
-    private let playbackQueue = DispatchQueue(label: "com.walkietalkie.playback")
+    private let playbackQueue = DispatchQueue(label: "com.walkietalkie.playback", qos: .userInteractive)
     
-    // MARK: - Init
+    // NEW: The Batching Tray
+    private var batchedFrames: [Data] = []
+    private let framesPerBatch = 4
     
     init() {
+        configureAudioSession()
         setupPlaybackEngine()
     }
     
-    // MARK: - Audio Session
-    
-    private func configureAudioSession(forCapture: Bool) {
+    private func configureAudioSession() {
         let session = AVAudioSession.sharedInstance()
         do {
-            if forCapture {
-                try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetoothHFP])
-            } else {
-                try session.setCategory(.playback, mode: .default)
-            }
+            try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetooth, .mixWithOthers])
             try session.setPreferredSampleRate(AudioConstants.sampleRate)
-            try session.setPreferredIOBufferDuration(
-                Double(AudioConstants.frameSamples) / AudioConstants.sampleRate
-            )
+            try session.setPreferredIOBufferDuration(0.02)
             try session.setActive(true)
         } catch {
-            print("AudioPipeline: Failed to configure audio session — \(error)")
+            print("AudioPipeline: Failed to config session — \(error)")
         }
     }
-    
-    // MARK: - Send Path (Mic → Encode → Mesh)
     
     func startTransmitting() {
         guard !isTransmitting else { return }
         
-        configureAudioSession(forCapture: true)
-        
         let inputNode = captureEngine.inputNode
         let inputFormat = inputNode.outputFormat(forBus: 0)
         
-        // We need to convert the hardware format → our canonical 16 kHz mono format.
         guard let targetFormat = AudioConstants.pcmFormat as AVAudioFormat?,
-              let converter = AVAudioConverter(from: inputFormat, to: targetFormat) else {
-            print("AudioPipeline: Cannot create format converter.")
-            return
-        }
+              let converter = AVAudioConverter(from: inputFormat, to: targetFormat) else { return }
         
-        let frameSamples = AudioConstants.frameSamples
+        leftoverSamples.removeAll()
+        batchedFrames.removeAll()
+        sequenceCounter = 0
         
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: inputFormat) { [weak self] (buffer, _) in
+        inputNode.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { [weak self] (buffer, _) in
             guard let self = self else { return }
             
-            // Convert to 16 kHz mono
-            guard let convertedBuffer = AVAudioPCMBuffer(
-                pcmFormat: targetFormat,
-                frameCapacity: frameSamples
-            ) else { return }
+            let ratio = AudioConstants.sampleRate / inputFormat.sampleRate
+            let capacity = AVAudioFrameCount(Double(buffer.frameLength) * ratio) + 400
+            guard let convertedBuffer = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: capacity) else { return }
             
             var error: NSError?
+            var hasData = true
             let status = converter.convert(to: convertedBuffer, error: &error) { _, outStatus in
-                outStatus.pointee = .haveData
-                return buffer
+                if hasData {
+                    outStatus.pointee = .haveData
+                    hasData = false
+                    return buffer
+                } else {
+                    outStatus.pointee = .noDataNow
+                    return nil
+                }
             }
             
-            guard status != .error, error == nil else {
-                print("AudioPipeline: Conversion error — \(error?.localizedDescription ?? "unknown")")
-                return
-            }
+            guard status != .error, error == nil else { return }
             
-            convertedBuffer.frameLength = min(convertedBuffer.frameLength, frameSamples)
+            let channelData = convertedBuffer.floatChannelData![0]
+            let newSamples = Array(UnsafeBufferPointer(start: channelData, count: Int(convertedBuffer.frameLength)))
             
-            // Encode
-            guard let compressedData = self.codec.encode(pcmBuffer: convertedBuffer) else { return }
-            
-            // Wrap in AudioPacket
-            let packet = AudioPacket(
-                sequenceNumber: self.sequenceCounter,
-                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
-                frameDurationMs: AudioConstants.frameDurationMs,
-                senderID: UIDevice.current.name,
-                opusData: compressedData
-            )
-            self.sequenceCounter += 1
-            
-            // Serialize and hand off to the mesh
-            if let serialized = packet.serialize() {
-                self.onAudioPacketReady?(serialized)
+            self.audioQueue.async {
+                self.leftoverSamples.append(contentsOf: newSamples)
+                let frameSamples = Int(AudioConstants.frameSamples)
+                
+                while self.leftoverSamples.count >= frameSamples {
+                    let chunkSamples = Array(self.leftoverSamples.prefix(frameSamples))
+                    self.leftoverSamples.removeFirst(frameSamples)
+                    
+                    guard let chunkBuffer = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: AVAudioFrameCount(frameSamples)) else { continue }
+                    chunkBuffer.frameLength = AVAudioFrameCount(frameSamples)
+                    chunkBuffer.floatChannelData![0].assign(from: chunkSamples, count: frameSamples)
+                    
+                    // Encode and add to the batching tray
+                    if let compressedData = self.codec.encode(pcmBuffer: chunkBuffer) {
+                        self.batchedFrames.append(compressedData)
+                        
+                        // Once the tray is full, send the packet!
+                        if self.batchedFrames.count >= self.framesPerBatch {
+                            let packet = AudioPacket(
+                                sequenceNumber: self.sequenceCounter,
+                                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                                frameDurationMs: AudioConstants.frameDurationMs,
+                                senderID: UIDevice.current.name,
+                                opusFrames: self.batchedFrames // Send the whole batch
+                            )
+                            self.sequenceCounter += 1
+                            self.batchedFrames.removeAll() // Empty the tray
+                            
+                            if let serialized = packet.serialize() {
+                                self.onAudioPacketReady?(serialized)
+                            }
+                        }
+                    }
+                }
             }
         }
         
         do {
             try captureEngine.start()
             DispatchQueue.main.async { self.isTransmitting = true }
-            print("AudioPipeline: 🎙️ Transmitting started")
         } catch {
-            print("AudioPipeline: Failed to start capture engine — \(error)")
+            print("AudioPipeline: Failed to start capture — \(error)")
         }
     }
     
@@ -166,54 +131,46 @@ final class AudioPipelineEngine: ObservableObject {
         guard isTransmitting else { return }
         captureEngine.inputNode.removeTap(onBus: 0)
         captureEngine.stop()
-        sequenceCounter = 0
-        DispatchQueue.main.async { self.isTransmitting = false }
-        print("AudioPipeline: 🎙️ Transmitting stopped")
-    }
-    
-    // MARK: - Receive Path (Mesh → Decode → Speaker)
-    
-    /// Called by the mesh routing engine whenever an audio payload arrives.
-    func receiveAudioData(_ data: Data, from senderName: String) {
-        guard let packet = AudioPacket.deserialize(from: data) else {
-            print("AudioPipeline: Failed to deserialize AudioPacket from \(senderName)")
-            return
+        
+        // Flush any remaining frames in the tray before shutting off
+        if !batchedFrames.isEmpty {
+            let packet = AudioPacket(
+                sequenceNumber: sequenceCounter,
+                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                frameDurationMs: AudioConstants.frameDurationMs,
+                senderID: UIDevice.current.name,
+                opusFrames: batchedFrames
+            )
+            if let serialized = packet.serialize() {
+                onAudioPacketReady?(serialized)
+            }
+            batchedFrames.removeAll()
         }
         
-        // Get or create a per-sender jitter buffer
+        DispatchQueue.main.async { self.isTransmitting = false }
+    }
+    
+    func receiveAudioData(_ data: Data, from senderName: String) {
+        guard let packet = AudioPacket.deserialize(from: data) else { return }
         let buffer = jitterBufferFor(sender: senderName)
         buffer.insert(packet)
-        
-        // Start the playback pump if it's not already running
         startPlaybackTimerIfNeeded()
     }
     
-    // MARK: - Playback Engine Setup
-    
     private func setupPlaybackEngine() {
         playbackEngine.attach(playerNode)
-        
         let format = AudioConstants.pcmFormat
         playbackEngine.connect(playerNode, to: playbackEngine.mainMixerNode, format: format)
-        
         do {
             try playbackEngine.start()
             playerNode.play()
-        } catch {
-            print("AudioPipeline: Failed to start playback engine — \(error)")
-        }
+        } catch { print("AudioPipeline: Playback start failed — \(error)") }
     }
     
-    // MARK: - Playback Timer
-    
-    /// A repeating timer that drains all jitter buffers every 20 ms (one frame period)
-    /// and schedules decoded PCM for playback.
     private func startPlaybackTimerIfNeeded() {
         guard playbackTimer == nil else { return }
-        
         DispatchQueue.main.async { self.isReceiving = true }
         
-        // Ensure playback engine is running
         if !playbackEngine.isRunning {
             try? playbackEngine.start()
             playerNode.play()
@@ -221,15 +178,12 @@ final class AudioPipelineEngine: ObservableObject {
         
         let timer = DispatchSource.makeTimerSource(queue: playbackQueue)
         let intervalMs = Int(AudioConstants.frameDurationMs)
-        timer.schedule(
-            deadline: .now() + .milliseconds(intervalMs * 3),  // initial fill delay
-            repeating: .milliseconds(intervalMs)
-        )
+        // Wait exactly 120ms before starting playback to build a healthy buffer
+        timer.schedule(deadline: .now() + .milliseconds(intervalMs * 6), repeating: .milliseconds(intervalMs))
         
         timer.setEventHandler { [weak self] in
             self?.drainBuffersAndPlay()
         }
-        
         timer.resume()
         playbackTimer = timer
     }
@@ -240,48 +194,25 @@ final class AudioPipelineEngine: ObservableObject {
         DispatchQueue.main.async { self.isReceiving = false }
     }
     
-    /// Drain one frame from each active jitter buffer, decode it, and schedule for playback.
     private func drainBuffersAndPlay() {
         var anyActive = false
-        
-        for (senderName, buffer) in jitterBuffers {
-            guard let packet = buffer.dequeue() else { continue }
+        for (_, buffer) in jitterBuffers {
+            // Because packets now hold multiple frames, the JitterBuffer
+            // hands us one FRAME at a time, not one packet at a time!
+            guard let frameData = buffer.dequeueFrame() else { continue }
             anyActive = true
             
-            guard let pcmBuffer = codec.decode(compressedData: packet.opusData) else {
-                print("AudioPipeline: Decode failed for packet \(packet.sequenceNumber) from \(senderName)")
-                continue
-            }
-            
-            // Schedule the decoded audio on the player node
+            guard let pcmBuffer = codec.decode(compressedData: frameData) else { continue }
             playerNode.scheduleBuffer(pcmBuffer, completionHandler: nil)
         }
         
-        // If all buffers are exhausted for a while, stop the timer to save resources.
-        if !anyActive {
-            // Simple heuristic: stop after seeing no data.
-            // A production app might wait longer before stopping.
-            stopPlaybackTimer()
-            print("AudioPipeline: All jitter buffers drained. Playback paused.")
-        }
+        if !anyActive { stopPlaybackTimer() }
     }
-    
-    // MARK: - Helpers
     
     private func jitterBufferFor(sender: String) -> JitterBuffer {
-        if let existing = jitterBuffers[sender] {
-            return existing
-        }
-        let newBuffer = JitterBuffer(maxDepth: 5)
+        if let existing = jitterBuffers[sender] { return existing }
+        let newBuffer = JitterBuffer(maxDepth: 10) // Deeper buffer for stability
         jitterBuffers[sender] = newBuffer
         return newBuffer
-    }
-    
-    /// Clean up resources.
-    func shutdown() {
-        stopTransmitting()
-        stopPlaybackTimer()
-        captureEngine.stop()
-        playbackEngine.stop()
     }
 }

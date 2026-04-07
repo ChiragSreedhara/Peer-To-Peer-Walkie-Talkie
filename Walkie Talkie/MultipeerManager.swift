@@ -1,8 +1,3 @@
-/*
- ============================================================================
- LAYER 4: NETWORK TRANSPORT LAYER
- ============================================================================
- */
 
 import MultipeerConnectivity
 import Foundation
@@ -53,15 +48,18 @@ class MultipeerManager: NSObject, ObservableObject {
         }
     }
     
-    func broadcastToNeighbors(data: Data) {
-        guard !session.connectedPeers.isEmpty else { return }
-        do {
-            try session.send(data, toPeers: session.connectedPeers, with: .unreliable)
-        } catch {
-            onDebugLog?("Failed to blast data: \(error)")
+        func broadcastToNeighbors(data: Data, excluding excludedPeerName: String? = nil) {
+            // Filter out the guy who just sent it to us
+            let targetPeers = session.connectedPeers.filter { $0.displayName != excludedPeerName }
+            
+            guard !targetPeers.isEmpty else { return }
+            
+            do {
+                try session.send(data, toPeers: targetPeers, with: .unreliable)
+            } catch {
+                onDebugLog?("Failed to blast data: \(error)")
+            }
         }
-    }
-    
     private func rebuildSession() {
         session.disconnect()
         

@@ -59,57 +59,54 @@ class MeshRoutingEngine: ObservableObject {
     }
     
     private func processIncomingBytes(_ data: Data, from immediateSender: String) {
-        guard let packet = try? JSONDecoder().decode(MeshPacket.self, from: data) else {
-            log("Layer 3 Error: Failed to parse MeshPacket wrapper.")
-            return
+            guard let packet = try? JSONDecoder().decode(MeshPacket.self, from: data) else {
+                log("Layer 3 Error: Failed to parse MeshPacket wrapper.")
+                return
+            }
+            
+            guard !seenMessageIDs.contains(packet.messageID) else { return }
+            registerMessageSeen(packet.messageID)
+            
+            let shortID = packet.messageID.uuidString.prefix(4)
+            log("Layer 3: Caught packet [\(shortID)] originally from \(packet.senderID). TTL: \(packet.ttl)")
+            
+            if packet.targetID == nil || packet.targetID == self.myName {
+                onPayloadReceived?(packet.payload, packet.senderID, immediateSender, packet.targetID)
+            } else {
+                log("Layer 3: Packet targeted for \(packet.targetID!). I am just a middle-man. Skipping UI.")
+            }
+            
+            var forwardedPacket = packet
+            forwardedPacket.ttl -= 1
+            
+            if forwardedPacket.ttl > 0 {
+                forwardToMesh(packet: forwardedPacket, excluding: immediateSender)
+            } else {
+                log("Layer 3: Packet [\(shortID)] reached TTL limit. Dropping.")
+            }
+        }
+            
+        func broadcast(payload: Data, to target: String?) {
+            let newPacket = MeshPacket(
+                messageID: UUID(),
+                senderID: self.myName,
+                targetID: target,
+                ttl: 3,
+                payload: payload
+            )
+            
+            registerMessageSeen(newPacket.messageID)
+            guard let rawData = try? JSONEncoder().encode(newPacket) else { return }
+            
+            log("Layer 3: Originating new blast [\(newPacket.messageID.uuidString.prefix(4))] to \(target ?? "Everyone")")
+            transport.broadcastToNeighbors(data: rawData)
         }
         
-        guard !seenMessageIDs.contains(packet.messageID) else { return }
-        registerMessageSeen(packet.messageID)
-        
-        let shortID = packet.messageID.uuidString.prefix(4)
-        log("Layer 3: Caught packet [\(shortID)] originally from \(packet.senderID). TTL: \(packet.ttl)")
-        
-        // Target check: Is this message for me, or a broadcast?
-        if packet.targetID == nil || packet.targetID == self.myName {
-            onPayloadReceived?(packet.payload, packet.senderID, immediateSender, packet.targetID)
-        } else {
-            log("Layer 3: Packet targeted for \(packet.targetID!). I am just a middle-man. Skipping UI.")
+        private func forwardToMesh(packet: MeshPacket, excluding: String) {
+            guard let rawData = try? JSONEncoder().encode(packet) else { return }
+            log("Layer 3: Forwarding [\(packet.messageID.uuidString.prefix(4))] -> TTL: \(packet.ttl) (Skipping \(excluding))")
+            transport.broadcastToNeighbors(data: rawData, excluding: excluding)
         }
-        
-        // Forwarding logic
-        var forwardedPacket = packet
-        forwardedPacket.ttl -= 1
-        
-        if forwardedPacket.ttl > 0 {
-            forwardToMesh(packet: forwardedPacket)
-        } else {
-            log("Layer 3: Packet [\(shortID)] reached TTL limit. Dropping.")
-        }
-    }
-        
-    func broadcast(payload: Data, to target: String?) {
-        let newPacket = MeshPacket(
-            messageID: UUID(),
-            senderID: self.myName,
-            targetID: target,
-            ttl: 3,
-            payload: payload
-        )
-        
-        registerMessageSeen(newPacket.messageID)
-        
-        guard let rawData = try? JSONEncoder().encode(newPacket) else { return }
-        
-        log("Layer 3: Originating new blast [\(newPacket.messageID.uuidString.prefix(4))] to \(target ?? "Everyone")")
-        transport.broadcastToNeighbors(data: rawData)
-    }
-    
-    private func forwardToMesh(packet: MeshPacket) {
-        guard let rawData = try? JSONEncoder().encode(packet) else { return }
-        log("Layer 3: Forwarding packet [\(packet.messageID.uuidString.prefix(4))] -> New TTL: \(packet.ttl)")
-        transport.broadcastToNeighbors(data: rawData)
-    }
     
     private func registerMessageSeen(_ id: UUID) {
         seenMessageIDs.insert(id)

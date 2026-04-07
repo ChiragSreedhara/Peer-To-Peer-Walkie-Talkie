@@ -9,7 +9,6 @@ struct ContentView: View {
     @State private var hasMicPermission = false
     @State private var showingPermissionAlert = false
     
-    // NEW: We call our random generator right here!
     @State private var userName: String = ContentView.generateRandomCallsign()
     @State private var peersToIgnore: String = ""
     @State private var isMeshStarted: Bool = false
@@ -20,7 +19,7 @@ struct ContentView: View {
     
     static func generateRandomCallsign() -> String {
         let nouns = ["Falcon", "Wolf", "Hawk", "Bear", "Fox", "Raven", "Snake", "Echo"]
-        let randomNum = Int.random(in: 10...99)
+        let randomNum = Int.random(in: 1...9)
         
         return "\(nouns.randomElement()!)\(randomNum)"
     }

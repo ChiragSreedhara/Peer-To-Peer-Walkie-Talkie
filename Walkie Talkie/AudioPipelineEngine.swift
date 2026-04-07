@@ -25,7 +25,7 @@ final class AudioPipelineEngine: ObservableObject {
     
     // NEW: The Batching Tray
     private var batchedFrames: [Data] = []
-    private let framesPerBatch = 4
+    private let framesPerBatch = 25
     
     init() {
         configureAudioSession()
@@ -94,11 +94,9 @@ final class AudioPipelineEngine: ObservableObject {
                     chunkBuffer.frameLength = AVAudioFrameCount(frameSamples)
                     chunkBuffer.floatChannelData![0].assign(from: chunkSamples, count: frameSamples)
                     
-                    // Encode and add to the batching tray
                     if let compressedData = self.codec.encode(pcmBuffer: chunkBuffer) {
                         self.batchedFrames.append(compressedData)
                         
-                        // Once the tray is full, send the packet!
                         if self.batchedFrames.count >= self.framesPerBatch {
                             let packet = AudioPacket(
                                 sequenceNumber: self.sequenceCounter,
@@ -108,10 +106,13 @@ final class AudioPipelineEngine: ObservableObject {
                                 opusFrames: self.batchedFrames // Send the whole batch
                             )
                             self.sequenceCounter += 1
-                            self.batchedFrames.removeAll() // Empty the tray
+                            self.batchedFrames.removeAll() //empty the tray
                             
-                            if let serialized = packet.serialize() {
-                                self.onAudioPacketReady?(serialized)
+                            let serializedData = packet.serialize()
+                            DispatchQueue.global(qos: .userInitiated).async {
+                                if let data = serializedData {
+                                    self.onAudioPacketReady?(data)
+                                }
                             }
                         }
                     }
@@ -132,7 +133,6 @@ final class AudioPipelineEngine: ObservableObject {
         captureEngine.inputNode.removeTap(onBus: 0)
         captureEngine.stop()
         
-        // Flush any remaining frames in the tray before shutting off
         if !batchedFrames.isEmpty {
             let packet = AudioPacket(
                 sequenceNumber: sequenceCounter,
@@ -178,7 +178,6 @@ final class AudioPipelineEngine: ObservableObject {
         
         let timer = DispatchSource.makeTimerSource(queue: playbackQueue)
         let intervalMs = Int(AudioConstants.frameDurationMs)
-        // Wait exactly 120ms before starting playback to build a healthy buffer
         timer.schedule(deadline: .now() + .milliseconds(intervalMs * 6), repeating: .milliseconds(intervalMs))
         
         timer.setEventHandler { [weak self] in
@@ -197,8 +196,6 @@ final class AudioPipelineEngine: ObservableObject {
     private func drainBuffersAndPlay() {
         var anyActive = false
         for (_, buffer) in jitterBuffers {
-            // Because packets now hold multiple frames, the JitterBuffer
-            // hands us one FRAME at a time, not one packet at a time!
             guard let frameData = buffer.dequeueFrame() else { continue }
             anyActive = true
             

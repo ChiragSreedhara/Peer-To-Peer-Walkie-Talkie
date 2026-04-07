@@ -85,7 +85,6 @@ final class OpusCodecWrapper: AudioCodec {
         
          let frameSize = Int32(pcmBuffer.frameLength)
         
-         // Convert Float32 -> Int16 for Opus
          var pcm16 = [Int16](repeating: 0, count: Int(frameSize))
          for i in 0..<Int(frameSize) {
              let clamped = max(-1.0, min(1.0, floatData[i]))
@@ -129,7 +128,6 @@ final class OpusCodecWrapper: AudioCodec {
          guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(decodedSamples)) else { return nil }
          buffer.frameLength = AVAudioFrameCount(decodedSamples)
         
-         // Convert Int16 -> Float32
          let outFloat = buffer.floatChannelData![0]
          for i in 0..<Int(decodedSamples) {
              outFloat[i] = Float(pcm16[i]) / Float(Int16.max)

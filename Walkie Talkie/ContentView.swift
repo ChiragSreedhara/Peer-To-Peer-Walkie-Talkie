@@ -2,6 +2,13 @@ import SwiftUI
 import Combine
 import AVFoundation
 
+struct MeshMessage: Identifiable {
+    let id = UUID()
+    let sender: String
+    let text: String?
+    let audioData: Data?
+}
+
 struct ContentView: View {
     @StateObject var networkManager = MeshRoutingEngine()
     @StateObject var audioPipeline = AudioPipelineEngine()
@@ -15,12 +22,12 @@ struct ContentView: View {
     
     @State private var messageToSend: String = ""
     @State private var selectedTarget: String = "Everyone"
-    @State private var receivedMessage: String = "No messages yet"
+    
+    @State private var inboxMessages: [MeshMessage] = []
     
     static func generateRandomCallsign() -> String {
         let nouns = ["Falcon", "Wolf", "Hawk", "Bear", "Fox", "Raven", "Snake", "Echo"]
         let randomNum = Int.random(in: 1...9)
-        
         return "\(nouns.randomElement()!)\(randomNum)"
     }
     
@@ -32,10 +39,8 @@ struct ContentView: View {
                     VStack(spacing: 10) {
                         TextField("Enter your name", text: $userName)
                             .textFieldStyle(.roundedBorder)
-                        
                         TextField("Simulate distance: Ignore peers (e.g. Alice, Bob)", text: $peersToIgnore)
                             .textFieldStyle(.roundedBorder)
-                        
                         Button("Start Mesh") {
                             guard !userName.isEmpty else { return }
                             networkManager.startMesh(withName: userName, ignoring: peersToIgnore)
@@ -62,7 +67,6 @@ struct ContentView: View {
                     Text("Connected Adjacent Peers: \(networkManager.connectedPeers.count)")
                         .font(.subheadline)
                         .foregroundColor(networkManager.connectedPeers.isEmpty ? .red : .green)
-                    
                     HStack {
                         ForEach(networkManager.connectedPeers, id: \.self) { peerName in
                             Text("📱 \(peerName)")
@@ -76,7 +80,6 @@ struct ContentView: View {
                     Text("System Logs:")
                         .font(.caption)
                         .bold()
-                    
                     ScrollView {
                         VStack(alignment: .leading) {
                             ForEach(networkManager.debugLogs, id: \.self) { log in
@@ -100,11 +103,48 @@ struct ContentView: View {
                         .font(.caption)
                         .foregroundColor(.gray)
                     
-                    Text(receivedMessage)
-                        .padding()
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.gray.opacity(0.2))
-                        .cornerRadius(8)
+                    ScrollView {
+                        VStack(spacing: 8) {
+                            if inboxMessages.isEmpty {
+                                Text("No messages yet")
+                                    .foregroundColor(.gray)
+                                    .padding()
+                            }
+                            
+                            ForEach(inboxMessages) { msg in
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(msg.sender)
+                                            .font(.caption)
+                                            .bold()
+                                            .foregroundColor(.blue)
+                                        
+                                        if let text = msg.text {
+                                            Text(text)
+                                        } else if let audioData = msg.audioData {
+                                            Button {
+                                                audioPipeline.playVoiceNote(audioData)
+                                            } label: {
+                                                HStack {
+                                                    Image(systemName: "play.circle.fill")
+                                                    Text("Voice Note (\(audioData.count / 1024) KB)")
+                                                }
+                                                .foregroundColor(.white)
+                                                .padding(8)
+                                                .background(Color.blue)
+                                                .cornerRadius(8)
+                                            }
+                                        }
+                                    }
+                                    Spacer()
+                                }
+                                .padding()
+                                .background(Color.gray.opacity(0.2))
+                                .cornerRadius(8)
+                            }
+                        }
+                    }
+                    .frame(height: 200)
                 }
                 .padding(.horizontal)
                 
@@ -143,15 +183,15 @@ struct ContentView: View {
                 Divider()
                 
                 VStack(spacing: 8) {
-                    Text(audioPipeline.isTransmitting ? "Release to stop" : "Hold to talk")
+                    Text(audioPipeline.isTransmitting ? "Recording... (Max 3s)" : "Hold to talk")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(audioPipeline.isTransmitting ? .red : .secondary)
                     
                     Circle()
                         .fill(audioPipeline.isTransmitting ? Color.red : Color.blue)
                         .frame(width: 120, height: 120)
                         .overlay(
-                            Image(systemName: "mic.fill")
+                            Image(systemName: audioPipeline.isPlaying ? "speaker.wave.2.fill" : "mic.fill")
                                 .font(.system(size: 40))
                                 .foregroundColor(.white)
                         )
@@ -202,17 +242,14 @@ struct ContentView: View {
             
             networkManager.onPayloadReceived = { payloadData, originalSender, immediateRelayer, targetID in
                 
-                if let _ = AudioPacket.deserialize(from: payloadData) {
-                    audioPipeline.receiveAudioData(payloadData, from: originalSender)
-                }
-                else if let decodedText = String(data: payloadData, encoding: .utf8) {
-                    DispatchQueue.main.async {
-                        if originalSender == immediateRelayer {
-                            self.receivedMessage = "[\(originalSender)]: \(decodedText)"
-                        } else {
-                            self.receivedMessage = "[\(originalSender) via \(immediateRelayer)]: \(decodedText)"
-                        }
-                    }
+                let senderLabel = originalSender == immediateRelayer ? originalSender : "\(originalSender) via \(immediateRelayer)"
+                
+                if let decodedText = String(data: payloadData, encoding: .utf8) {
+                    let msg = MeshMessage(sender: senderLabel, text: decodedText, audioData: nil)
+                    DispatchQueue.main.async { self.inboxMessages.append(msg) }
+                } else {
+                    let msg = MeshMessage(sender: senderLabel, text: nil, audioData: payloadData)
+                    DispatchQueue.main.async { self.inboxMessages.append(msg) }
                 }
             }
         }

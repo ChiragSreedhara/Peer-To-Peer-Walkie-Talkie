@@ -7,251 +7,450 @@ struct MeshMessage: Identifiable {
     let sender: String
     let text: String?
     let audioData: Data?
+    let timestamp = Date()
 }
 
+private extension Color {
+    static let wtBackground   = Color(red: 0.039, green: 0.039, blue: 0.059)
+    static let wtSurface      = Color(red: 0.075, green: 0.071, blue: 0.110)
+    static let wtBorder       = Color(red: 0.14,  green: 0.12,  blue: 0.22)
+    static let wtPurple       = Color(red: 0.482, green: 0.184, blue: 0.969)
+    static let wtBlue         = Color(red: 0.102, green: 0.451, blue: 0.910)
+    static let wtGreen        = Color(red: 0.098, green: 0.863, blue: 0.510)
+    static let wtDimText      = Color.white.opacity(0.35)
+    static let wtFaintText    = Color.white.opacity(0.18)
+}
+
+private let wtGradient = LinearGradient(
+    colors: [.wtPurple, .wtBlue],
+    startPoint: .topLeading,
+    endPoint: .bottomTrailing
+)
+
+// MARK: - ContentView
 struct ContentView: View {
-    @StateObject var networkManager = MeshRoutingEngine()
-    @StateObject var audioPipeline = AudioPipelineEngine()
-    
-    @State private var hasMicPermission = false
+
+    @StateObject private var networkManager = MeshRoutingEngine()
+    @StateObject private var audioPipeline  = AudioPipelineEngine()
+
+    @State private var isPoweredOn: Bool      = false
+    @State private var userName: String       = ContentView.generateRandomCallsign()
+    @State private var isEditingName: Bool    = false
+    @State private var editNameTemp: String   = ""
+
+    @State private var hasMicPermission       = false
     @State private var showingPermissionAlert = false
-    
-    @State private var userName: String = ContentView.generateRandomCallsign()
-    @State private var peersToIgnore: String = ""
-    @State private var isMeshStarted: Bool = false
-    
+    @State private var showDebugLogs          = false
+
+    @State private var inboxMessages: [MeshMessage] = []
     @State private var messageToSend: String = ""
     @State private var selectedTarget: String = "Everyone"
     
-    @State private var inboxMessages: [MeshMessage] = []
-    
+    @State private var peersToIgnore: String = ""
+
     static func generateRandomCallsign() -> String {
         let nouns = ["Falcon", "Wolf", "Hawk", "Bear", "Fox", "Raven", "Snake", "Echo"]
         let randomNum = Int.random(in: 1...9)
         return "\(nouns.randomElement()!)\(randomNum)"
     }
-    
+
     var body: some View {
-        ScrollView {
-            VStack(spacing: 25) {
-                
-                if !isMeshStarted {
-                    VStack(spacing: 10) {
-                        TextField("Enter your name", text: $userName)
-                            .textFieldStyle(.roundedBorder)
-                        TextField("Simulate distance: Ignore peers (e.g. Alice, Bob)", text: $peersToIgnore)
-                            .textFieldStyle(.roundedBorder)
-                        Button("Start Mesh") {
-                            guard !userName.isEmpty else { return }
+        ZStack {
+            Color.wtBackground.ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                topBar
+                    .padding(.horizontal, 20)
+                    .padding(.top, 12)
+                    .padding(.bottom, 16)
+
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 16) {
+                        connectionStatusBadge
+                        
+                        if isPoweredOn {
+                            dmSection
+                            inboxSection
+                        }
+
+                        Spacer(minLength: 32)
+
+                        pttSection
+
+                        Spacer(minLength: 24)
+
+                        debugSection
+
+                        Spacer(minLength: 32)
+                    }
+                    .padding(.horizontal, 20)
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+        .onAppear {
+            requestMicPermission()
+            wireAudioPipeline()
+        }
+        .alert("Microphone Access Needed", isPresented: $showingPermissionAlert) {
+            Button("Open Settings") {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Please allow microphone access in Settings to use Push to Talk.")
+        }
+    }
+
+    private var topBar: some View {
+        HStack {
+            HStack(spacing: 8) {
+                Button {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
+                        isPoweredOn.toggle()
+                        if isPoweredOn {
                             networkManager.startMesh(withName: userName, ignoring: peersToIgnore)
-                            isMeshStarted = true
+                        } else {
+                            networkManager.stopMesh()
                         }
-                        .buttonStyle(.borderedProminent)
-                        .padding(.top, 5)
                     }
-                    .padding(.horizontal)
-                } else {
-                    VStack {
-                        Text("Operating as: \(userName)")
-                            .font(.headline)
-                            .foregroundColor(.green)
-                        if !peersToIgnore.isEmpty {
-                            Text("Ignoring: \(peersToIgnore)")
-                                .font(.caption)
-                                .foregroundColor(.red)
-                        }
+                } label: {
+                    ZStack {
+                        Circle()
+                            .fill(isPoweredOn ? Color.wtGreen.opacity(0.18) : Color.red.opacity(0.18))
+                            .frame(width: 44, height: 44)
+                        Image(systemName: "power")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(isPoweredOn ? .wtGreen : .red)
                     }
                 }
-                
-                VStack {
-                    Text("Connected Adjacent Peers: \(networkManager.connectedPeers.count)")
-                        .font(.subheadline)
-                        .foregroundColor(networkManager.connectedPeers.isEmpty ? .red : .green)
-                    HStack {
-                        ForEach(networkManager.connectedPeers, id: \.self) { peerName in
-                            Text("📱 \(peerName)")
-                                .font(.caption)
-                                .foregroundColor(.blue)
-                        }
+
+                if !isPoweredOn {
+                    Text("Offline")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.red)
+                }
+            }
+
+            Spacer()
+
+            if isEditingName {
+                HStack(spacing: 6) {
+                    TextField("Your name", text: $editNameTemp)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.white)
+                        .frame(minWidth: 80)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(Color.wtSurface)
+                        .clipShape(Capsule())
+
+                    Button {
+                        let trimmed = editNameTemp.trimmingCharacters(in: .whitespaces)
+                        if !trimmed.isEmpty { userName = trimmed }
+                        isEditingName = false
+                    } label: {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 26))
+                            .foregroundStyle(wtGradient)
                     }
                 }
+            } else {
+                Button {
+                    guard !isPoweredOn else { return }
+                    editNameTemp = userName
+                    isEditingName = true
+                } label: {
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(isPoweredOn ? Color.wtGreen : Color.gray)
+                            .frame(width: 7, height: 7)
+                        Text(userName)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.white)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(Color.wtSurface)
+                    .clipShape(Capsule())
+                    .overlay(Capsule().stroke(Color.wtBorder, lineWidth: 1))
+                }
+            }
+        }
+    }
+
+    private var connectionStatusBadge: some View {
+        HStack(spacing: 8) {
+            if !isPoweredOn {
+                Image(systemName: "antenna.radiowaves.left.and.right.slash")
+                    .font(.system(size: 13))
+                    .foregroundColor(.wtDimText)
+            } else if !networkManager.connectedPeers.isEmpty {
+                Image(systemName: "person.2.fill")
+                    .font(.system(size: 13))
+                    .foregroundColor(.wtGreen)
+            } else {
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle(tint: .wtDimText))
+                    .scaleEffect(0.75)
+            }
+
+            Text(isPoweredOn
+                 ? (!networkManager.connectedPeers.isEmpty
+                    ? "Connected · \(networkManager.connectedPeers.count) peers"
+                    : "Searching for peers…")
+                 : "Turn on to connect")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(!networkManager.connectedPeers.isEmpty ? .wtGreen : .wtDimText)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(Capsule().fill(!networkManager.connectedPeers.isEmpty ? Color.wtGreen.opacity(0.10) : Color.white.opacity(0.05)))
+        .overlay(Capsule().stroke(!networkManager.connectedPeers.isEmpty ? Color.wtGreen.opacity(0.30) : Color.white.opacity(0.08), lineWidth: 1))
+    }
+
+    private var dmSection: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Text("Target:")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.wtPurple)
                 
-                VStack(alignment: .leading) {
-                    Text("System Logs:")
-                        .font(.caption)
-                        .bold()
-                    ScrollView {
-                        VStack(alignment: .leading) {
+                Picker("Target", selection: $selectedTarget) {
+                    Text("Everyone").tag("Everyone")
+                    ForEach(networkManager.connectedPeers, id: \.self) { peer in
+                        Text(peer).tag(peer)
+                    }
+                }
+                .tint(.white)
+                Spacer()
+            }
+            .padding(.horizontal, 8)
+
+            HStack {
+                TextField("Type a text message...", text: $messageToSend)
+                    .padding(12)
+                    .background(Color.wtSurface)
+                    .cornerRadius(12)
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.wtBorder, lineWidth: 1))
+                    .foregroundColor(.white)
+                
+                Button {
+                    guard !messageToSend.isEmpty, isPoweredOn else { return }
+                    if let rawBytes = messageToSend.data(using: .utf8) {
+                        let target: String? = selectedTarget == "Everyone" ? nil : selectedTarget
+                        networkManager.broadcast(payload: rawBytes, to: target)
+                        
+                        let msg = MeshMessage(sender: "Me (\(target ?? "Everyone"))", text: messageToSend, audioData: nil)
+                        inboxMessages.append(msg)
+                        messageToSend = ""
+                    }
+                } label: {
+                    Image(systemName: "paperplane.fill")
+                        .foregroundColor(.white)
+                        .padding(12)
+                        .background(wtGradient)
+                        .cornerRadius(12)
+                }
+            }
+        }
+    }
+
+    private var inboxSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Chat Inbox")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.wtPurple)
+                Spacer()
+            }
+            .padding(.horizontal, 4)
+
+            if inboxMessages.isEmpty {
+                Text("No messages yet...")
+                    .font(.system(size: 13))
+                    .foregroundColor(.wtDimText)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, 20)
+                    .background(Color.wtSurface)
+                    .clipShape(RoundedRectangle(cornerRadius: 18))
+                    .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.wtBorder, lineWidth: 1))
+            } else {
+                VStack(spacing: 10) {
+                    ForEach(inboxMessages.reversed()) { msg in
+                        HStack {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(msg.sender)
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundColor(.white)
+                                
+                                if let text = msg.text {
+                                    Text(text)
+                                        .font(.system(size: 14))
+                                        .foregroundColor(.white.opacity(0.9))
+                                } else if let audioData = msg.audioData {
+                                    Button {
+                                        audioPipeline.playVoiceNote(audioData)
+                                    } label: {
+                                        HStack {
+                                            Image(systemName: audioPipeline.isPlaying ? "speaker.wave.2.fill" : "play.circle.fill")
+                                            Text("Play Voice Note")
+                                        }
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 8)
+                                        .background(wtGradient)
+                                        .clipShape(Capsule())
+                                    }
+                                }
+                            }
+                            Spacer()
+                            Text(msg.timestamp, style: .time)
+                                .font(.system(size: 11))
+                                .foregroundColor(.wtDimText)
+                        }
+                        .padding(14)
+                        .background(Color.wtSurface)
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.wtBorder, lineWidth: 1))
+                    }
+                }
+            }
+        }
+    }
+
+    private var pttSection: some View {
+        VStack(spacing: 12) {
+            ZStack {
+                if audioPipeline.isTransmitting {
+                    ForEach([1, 2, 3], id: \.self) { i in
+                        Circle()
+                            .stroke(
+                                LinearGradient(colors: [Color.wtPurple.opacity(0.35 / Double(i)),
+                                                        Color.wtBlue.opacity(0.25 / Double(i))],
+                                               startPoint: .topLeading,
+                                               endPoint: .bottomTrailing),
+                                lineWidth: 2
+                            )
+                            .frame(width: CGFloat(130 + i * 28), height: CGFloat(130 + i * 28))
+                    }
+                }
+
+                Circle()
+                    .fill(isPoweredOn ? AnyShapeStyle(wtGradient) : AnyShapeStyle(Color.white.opacity(0.07)))
+                    .frame(width: 130, height: 130)
+                    .shadow(color: audioPipeline.isTransmitting ? Color.wtPurple.opacity(0.55) : (isPoweredOn ? Color.wtBlue.opacity(0.30) : .clear), radius: audioPipeline.isTransmitting ? 30 : 14)
+                    .overlay(
+                        Image(systemName: "mic.fill")
+                            .font(.system(size: 44))
+                            .foregroundColor(isPoweredOn ? .white : .white.opacity(0.20))
+                    )
+                    .scaleEffect(audioPipeline.isTransmitting ? 1.07 : 1.0)
+                    .animation(.spring(response: 0.25, dampingFraction: 0.7), value: audioPipeline.isTransmitting)
+                    .gesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { _ in
+                                guard isPoweredOn else { return }
+                                guard hasMicPermission else {
+                                    showingPermissionAlert = true
+                                    return
+                                }
+                                if !audioPipeline.isTransmitting {
+                                    audioPipeline.startTransmitting()
+                                }
+                            }
+                            .onEnded { _ in
+                                audioPipeline.stopTransmitting()
+                            }
+                    )
+            }
+            .frame(width: 130 + 3 * 28 + 10, height: 130 + 3 * 28 + 10)
+
+            Text(audioPipeline.isTransmitting ? "Recording... (Max 3s)" : (isPoweredOn ? "Push to Talk" : "Turn on to talk"))
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(isPoweredOn ? .wtDimText : .wtFaintText)
+        }
+    }
+
+    private var debugSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) { showDebugLogs.toggle() }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "terminal")
+                        .font(.system(size: 11))
+                    Text("System / Testing Logs")
+                        .font(.system(size: 12))
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 10))
+                        .rotationEffect(.degrees(showDebugLogs ? 180 : 0))
+                }
+                .foregroundColor(.wtFaintText)
+            }
+
+            if showDebugLogs {
+                VStack(spacing: 8) {
+                    TextField("Topology Test: Ignore (e.g. Alice,Bob)", text: $peersToIgnore)
+                        .font(.system(size: 12))
+                        .padding(8)
+                        .background(Color.wtBackground)
+                        .cornerRadius(6)
+                        .foregroundColor(.white)
+
+                    ScrollView(showsIndicators: false) {
+                        VStack(alignment: .leading, spacing: 2) {
                             ForEach(networkManager.debugLogs, id: \.self) { log in
                                 Text(log)
                                     .font(.system(size: 10, design: .monospaced))
-                                    .foregroundColor(.white)
-                                    .padding(.bottom, 1)
+                                    .foregroundColor(Color.wtGreen.opacity(0.75))
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding()
+                        .padding(10)
                     }
-                    .background(Color.black.opacity(0.8))
-                    .cornerRadius(8)
-                    .frame(height: 150)
+                    .frame(height: 140)
+                    .background(Color.black.opacity(0.55))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.wtBorder, lineWidth: 1))
                 }
-                .padding(.horizontal)
-                
-                VStack(alignment: .leading) {
-                    Text("Chat Inbox:")
-                        .font(.caption)
-                        .foregroundColor(.gray)
-                    
-                    ScrollView {
-                        VStack(spacing: 8) {
-                            if inboxMessages.isEmpty {
-                                Text("No messages yet")
-                                    .foregroundColor(.gray)
-                                    .padding()
-                            }
-                            
-                            ForEach(inboxMessages) { msg in
-                                HStack {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(msg.sender)
-                                            .font(.caption)
-                                            .bold()
-                                            .foregroundColor(.blue)
-                                        
-                                        if let text = msg.text {
-                                            Text(text)
-                                        } else if let audioData = msg.audioData {
-                                            Button {
-                                                audioPipeline.playVoiceNote(audioData)
-                                            } label: {
-                                                HStack {
-                                                    Image(systemName: "play.circle.fill")
-                                                    Text("Voice Note (\(audioData.count / 1024) KB)")
-                                                }
-                                                .foregroundColor(.white)
-                                                .padding(8)
-                                                .background(Color.blue)
-                                                .cornerRadius(8)
-                                            }
-                                        }
-                                    }
-                                    Spacer()
-                                }
-                                .padding()
-                                .background(Color.gray.opacity(0.2))
-                                .cornerRadius(8)
-                            }
-                        }
-                    }
-                    .frame(height: 200)
-                }
-                .padding(.horizontal)
-                
-                VStack(spacing: 10) {
-                    HStack {
-                        Text("Send to:")
-                        Picker("Target", selection: $selectedTarget) {
-                            Text("Everyone").tag("Everyone")
-                            ForEach(networkManager.connectedPeers, id: \.self) { peer in
-                                Text(peer).tag(peer)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        Spacer()
-                    }
-                    .padding(.horizontal)
-                    
-                    HStack {
-                        TextField("Type a message...", text: $messageToSend)
-                            .textFieldStyle(RoundedBorderTextFieldStyle())
-                        
-                        Button("Send") {
-                            guard !messageToSend.isEmpty, isMeshStarted else { return }
-                            if let rawBytes = messageToSend.data(using: .utf8) {
-                                let target: String? = selectedTarget == "Everyone" ? nil : selectedTarget
-                                networkManager.broadcast(payload: rawBytes, to: target)
-                                messageToSend = ""
-                            }
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(!isMeshStarted)
-                    }
-                    .padding(.horizontal)
-                }
-                
-                Divider()
-                
-                VStack(spacing: 8) {
-                    Text(audioPipeline.isTransmitting ? "Recording... (Max 3s)" : "Hold to talk")
-                        .font(.caption)
-                        .foregroundColor(audioPipeline.isTransmitting ? .red : .secondary)
-                    
-                    Circle()
-                        .fill(audioPipeline.isTransmitting ? Color.red : Color.blue)
-                        .frame(width: 120, height: 120)
-                        .overlay(
-                            Image(systemName: audioPipeline.isPlaying ? "speaker.wave.2.fill" : "mic.fill")
-                                .font(.system(size: 40))
-                                .foregroundColor(.white)
-                        )
-                        .shadow(color: audioPipeline.isTransmitting ? .red.opacity(0.5) : .blue.opacity(0.3),
-                                radius: audioPipeline.isTransmitting ? 20 : 8)
-                        .scaleEffect(audioPipeline.isTransmitting ? 1.1 : 1.0)
-                        .animation(.easeInOut(duration: 0.15), value: audioPipeline.isTransmitting)
-                        .gesture(
-                            DragGesture(minimumDistance: 0)
-                                .onChanged { _ in
-                                    guard hasMicPermission else {
-                                        showingPermissionAlert = true
-                                        return
-                                    }
-                                    guard isMeshStarted else { return }
-                                    
-                                    if !audioPipeline.isTransmitting {
-                                        audioPipeline.startTransmitting()
-                                    }
-                                }
-                                .onEnded { _ in
-                                    audioPipeline.stopTransmitting()
-                                }
-                        )
-                }
-                .padding(.bottom, 30)
-                
+                .padding(10)
+                .background(Color.wtSurface)
+                .cornerRadius(12)
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.wtBorder, lineWidth: 1))
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
-            .padding(.top)
         }
-        .alert(isPresented: $showingPermissionAlert) {
-            Alert(
-                title: Text("Microphone Access Required"),
-                message: Text("Please enable microphone access in Settings to use the walkie-talkie."),
-                dismissButton: .default(Text("OK"))
-            )
+    }
+
+    private func wireAudioPipeline() {
+        audioPipeline.onAudioPacketReady = { data in
+            let target: String? = selectedTarget == "Everyone" ? nil : selectedTarget
+            networkManager.broadcast(payload: data, to: target)
+            
+            let msg = MeshMessage(sender: "Me (\(target ?? "Everyone"))", text: nil, audioData: data)
+            DispatchQueue.main.async { self.inboxMessages.append(msg) }
         }
-        .onAppear {
-            AVAudioSession.sharedInstance().requestRecordPermission { granted in
-                DispatchQueue.main.async {
-                    self.hasMicPermission = granted
-                }
-            }
+
+        networkManager.onPayloadReceived = { payload, senderID, relayer, targetID in
+            let senderLabel = senderID == relayer ? senderID : "\(senderID) via \(relayer)"
             
-            audioPipeline.onAudioPacketReady = { packetData in
-                networkManager.broadcast(payload: packetData, to: nil)
+            if let decodedText = String(data: payload, encoding: .utf8) {
+                let msg = MeshMessage(sender: senderLabel, text: decodedText, audioData: nil)
+                DispatchQueue.main.async { self.inboxMessages.append(msg) }
+            } else {
+                let msg = MeshMessage(sender: senderLabel, text: nil, audioData: payload)
+                DispatchQueue.main.async { self.inboxMessages.append(msg) }
             }
-            
-            networkManager.onPayloadReceived = { payloadData, originalSender, immediateRelayer, targetID in
-                
-                let senderLabel = originalSender == immediateRelayer ? originalSender : "\(originalSender) via \(immediateRelayer)"
-                
-                if let decodedText = String(data: payloadData, encoding: .utf8) {
-                    let msg = MeshMessage(sender: senderLabel, text: decodedText, audioData: nil)
-                    DispatchQueue.main.async { self.inboxMessages.append(msg) }
-                } else {
-                    let msg = MeshMessage(sender: senderLabel, text: nil, audioData: payloadData)
-                    DispatchQueue.main.async { self.inboxMessages.append(msg) }
-                }
-            }
+        }
+    }
+
+    private func requestMicPermission() {
+        AVAudioSession.sharedInstance().requestRecordPermission { granted in
+            DispatchQueue.main.async { self.hasMicPermission = granted }
         }
     }
 }

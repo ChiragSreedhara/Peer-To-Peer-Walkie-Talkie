@@ -48,6 +48,13 @@ class MultipeerManager: NSObject, ObservableObject {
         }
     }
     
+    func stopNetworking() {
+            session?.disconnect()
+            advertiser?.stopAdvertisingPeer()
+            browser?.stopBrowsingForPeers()
+            connectedPeers.removeAll()
+        }
+    
     func broadcastToNeighbors(data: Data, excluding excludedPeerName: String? = nil) {
             let targetPeers = session.connectedPeers.filter { $0.displayName != excludedPeerName }
             guard !targetPeers.isEmpty else { return }

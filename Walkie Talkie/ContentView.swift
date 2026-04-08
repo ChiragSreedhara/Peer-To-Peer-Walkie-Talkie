@@ -27,7 +27,6 @@ private let wtGradient = LinearGradient(
     endPoint: .bottomTrailing
 )
 
-// MARK: - ContentView
 struct ContentView: View {
 
     @StateObject private var networkManager = MeshRoutingEngine()
@@ -45,6 +44,8 @@ struct ContentView: View {
     @State private var inboxMessages: [MeshMessage] = []
     @State private var messageToSend: String = ""
     @State private var selectedTarget: String = "Everyone"
+    
+    @State private var playingMessageID: UUID? = nil
     
     @State private var peersToIgnore: String = ""
 
@@ -91,6 +92,11 @@ struct ContentView: View {
         .onAppear {
             requestMicPermission()
             wireAudioPipeline()
+        }
+        .onChange(of: audioPipeline.isPlaying) { isPlaying in
+            if !isPlaying {
+                playingMessageID = nil
+            }
         }
         .alert("Microphone Access Needed", isPresented: $showingPermissionAlert) {
             Button("Open Settings") {
@@ -243,8 +249,6 @@ struct ContentView: View {
                         let target: String? = selectedTarget == "Everyone" ? nil : selectedTarget
                         networkManager.broadcast(payload: rawBytes, to: target)
                         
-                        let msg = MeshMessage(sender: "Me (\(target ?? "Everyone"))", text: messageToSend, audioData: nil)
-                        inboxMessages.append(msg)
                         messageToSend = ""
                     }
                 } label: {
@@ -279,7 +283,7 @@ struct ContentView: View {
                     .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.wtBorder, lineWidth: 1))
             } else {
                 VStack(spacing: 10) {
-                    ForEach(inboxMessages.reversed()) { msg in
+                    ForEach(inboxMessages) { msg in
                         HStack {
                             VStack(alignment: .leading, spacing: 6) {
                                 Text(msg.sender)
@@ -290,27 +294,30 @@ struct ContentView: View {
                                     Text(text)
                                         .font(.system(size: 14))
                                         .foregroundColor(.white.opacity(0.9))
-                                } else if let audioData = msg.audioData {
-                                    Button {
-                                        audioPipeline.playVoiceNote(audioData)
-                                    } label: {
-                                        HStack {
-                                            Image(systemName: audioPipeline.isPlaying ? "speaker.wave.2.fill" : "play.circle.fill")
-                                            Text("Play Voice Note")
-                                        }
-                                        .font(.system(size: 13, weight: .semibold))
-                                        .foregroundColor(.white)
-                                        .padding(.horizontal, 12)
-                                        .padding(.vertical, 8)
-                                        .background(wtGradient)
-                                        .clipShape(Capsule())
-                                    }
+                                } else {
+                                    Text(msg.timestamp, style: .time)
+                                        .font(.system(size: 11))
+                                        .foregroundColor(.wtDimText)
                                 }
                             }
                             Spacer()
-                            Text(msg.timestamp, style: .time)
-                                .font(.system(size: 11))
-                                .foregroundColor(.wtDimText)
+                            
+                            if msg.text != nil {
+                                Text(msg.timestamp, style: .time)
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.wtDimText)
+                            } else if let audioData = msg.audioData {
+                                let isThisPlaying = (playingMessageID == msg.id) && audioPipeline.isPlaying
+                                
+                                Button {
+                                    playingMessageID = msg.id
+                                    audioPipeline.playVoiceNote(audioData)
+                                } label: {
+                                    Image(systemName: isThisPlaying ? "stop.circle.fill" : "play.circle.fill")
+                                        .font(.system(size: 32))
+                                        .foregroundStyle(isThisPlaying ? AnyShapeStyle(Color.wtGreen) : AnyShapeStyle(wtGradient))
+                                }
+                            }
                         }
                         .padding(14)
                         .background(Color.wtSurface)
@@ -430,9 +437,6 @@ struct ContentView: View {
         audioPipeline.onAudioPacketReady = { data in
             let target: String? = selectedTarget == "Everyone" ? nil : selectedTarget
             networkManager.broadcast(payload: data, to: target)
-            
-            let msg = MeshMessage(sender: "Me (\(target ?? "Everyone"))", text: nil, audioData: data)
-            DispatchQueue.main.async { self.inboxMessages.append(msg) }
         }
 
         networkManager.onPayloadReceived = { payload, senderID, relayer, targetID in
@@ -440,10 +444,10 @@ struct ContentView: View {
             
             if let decodedText = String(data: payload, encoding: .utf8) {
                 let msg = MeshMessage(sender: senderLabel, text: decodedText, audioData: nil)
-                DispatchQueue.main.async { self.inboxMessages.append(msg) }
+                DispatchQueue.main.async { self.inboxMessages.insert(msg, at: 0) }
             } else {
                 let msg = MeshMessage(sender: senderLabel, text: nil, audioData: payload)
-                DispatchQueue.main.async { self.inboxMessages.append(msg) }
+                DispatchQueue.main.async { self.inboxMessages.insert(msg, at: 0) }
             }
         }
     }

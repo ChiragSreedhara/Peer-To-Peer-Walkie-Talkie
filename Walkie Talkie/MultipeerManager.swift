@@ -48,18 +48,25 @@ class MultipeerManager: NSObject, ObservableObject {
         }
     }
     
+    func stopNetworking() {
+            session?.disconnect()
+            advertiser?.stopAdvertisingPeer()
+            browser?.stopBrowsingForPeers()
+            connectedPeers.removeAll()
+        }
+    
     func broadcastToNeighbors(data: Data, excluding excludedPeerName: String? = nil) {
-        let targetPeers = session.connectedPeers.filter { $0.displayName != excludedPeerName }
-        guard !targetPeers.isEmpty else { return }
-        
-        DispatchQueue.global(qos: .userInitiated).async {
-            do {
-                try self.session.send(data, toPeers: targetPeers, with: .unreliable)
-            } catch {
-                self.onDebugLog?("Failed to blast data: \(error)")
+            let targetPeers = session.connectedPeers.filter { $0.displayName != excludedPeerName }
+            guard !targetPeers.isEmpty else { return }
+            
+            DispatchQueue.global(qos: .userInitiated).async {
+                do {
+                    try self.session.send(data, toPeers: targetPeers, with: .reliable)
+                } catch {
+                    self.onDebugLog?("Failed to blast data: \(error)")
+                }
             }
         }
-    }
     private func rebuildSession() {
         session.disconnect()
         

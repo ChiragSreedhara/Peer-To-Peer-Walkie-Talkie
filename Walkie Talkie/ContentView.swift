@@ -247,7 +247,7 @@ struct ContentView: View {
                     guard !messageToSend.isEmpty, isPoweredOn else { return }
                     if let rawBytes = messageToSend.data(using: .utf8) {
                         let target: String? = selectedTarget == "Everyone" ? nil : selectedTarget
-                        networkManager.broadcast(payload: rawBytes, to: target)
+                        networkManager.broadcast(payload: rawBytes, to: target, type: .text)
                         
                         messageToSend = ""
                     }
@@ -376,7 +376,7 @@ struct ContentView: View {
             }
             .frame(width: 130 + 3 * 28 + 10, height: 130 + 3 * 28 + 10)
 
-            Text(audioPipeline.isTransmitting ? "Recording... (Max 3s)" : (isPoweredOn ? "Push to Talk" : "Turn on to talk"))
+            Text(audioPipeline.isTransmitting ? "Transmitting..." : (isPoweredOn ? "Push to Talk" : "Turn on to talk"))
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(isPoweredOn ? .wtDimText : .wtFaintText)
         }
@@ -436,18 +436,22 @@ struct ContentView: View {
     private func wireAudioPipeline() {
         audioPipeline.onAudioPacketReady = { data in
             let target: String? = selectedTarget == "Everyone" ? nil : selectedTarget
-            networkManager.broadcast(payload: data, to: target)
+            networkManager.broadcastLiveAudio(payload: data, to: target)
         }
 
-        networkManager.onPayloadReceived = { payload, senderID, relayer, targetID in
+        networkManager.onPayloadReceived = { payload, senderID, relayer, targetID, payloadType in
             let senderLabel = senderID == relayer ? senderID : "\(senderID) via \(relayer)"
-            
-            if let decodedText = String(data: payload, encoding: .utf8) {
-                let msg = MeshMessage(sender: senderLabel, text: decodedText, audioData: nil)
-                DispatchQueue.main.async { self.inboxMessages.insert(msg, at: 0) }
-            } else {
+            switch payloadType {
+            case .liveAudio:
+                audioPipeline.enqueueLiveFrame(payload)
+            case .voiceNote:
                 let msg = MeshMessage(sender: senderLabel, text: nil, audioData: payload)
                 DispatchQueue.main.async { self.inboxMessages.insert(msg, at: 0) }
+            case .text:
+                if let decodedText = String(data: payload, encoding: .utf8) {
+                    let msg = MeshMessage(sender: senderLabel, text: decodedText, audioData: nil)
+                    DispatchQueue.main.async { self.inboxMessages.insert(msg, at: 0) }
+                }
             }
         }
     }

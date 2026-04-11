@@ -67,6 +67,15 @@ class MultipeerManager: NSObject, ObservableObject {
                 }
             }
         }
+    
+    func broadcastUnreliableToNeighbors(data: Data, excluding excludedPeerName: String? = nil) {
+            let targetPeers = session.connectedPeers.filter { $0.displayName != excludedPeerName }
+            guard !targetPeers.isEmpty else { return }
+            
+            DispatchQueue.global(qos: .userInteractive).async {
+                try? self.session.send(data, toPeers: targetPeers, with: .unreliable)
+            }
+        }
     private func rebuildSession() {
         session.disconnect()
         

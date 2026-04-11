@@ -3,12 +3,19 @@ import UIKit
 import Combine
 import MultipeerConnectivity
 
+enum MeshPayloadType: String, Codable {
+    case text
+    case voiceNote
+    case liveAudio
+}
+
 struct MeshPacket: Codable {
     let messageID: UUID
     let senderID: String
     let targetID: String?
     var ttl: Int
     let payload: Data
+    let payloadType: MeshPayloadType
 }
 
 class MeshRoutingEngine: ObservableObject {
@@ -20,7 +27,7 @@ class MeshRoutingEngine: ObservableObject {
     @Published var connectedPeers: [String] = []
     @Published var debugLogs: [String] = []
     
-    var onPayloadReceived: ((Data, String, String, String?) -> Void)?
+    var onPayloadReceived: ((Data, String, String, String?, MeshPayloadType) -> Void)?
     
     init() {
         setupTransportInteractions()
@@ -76,7 +83,7 @@ class MeshRoutingEngine: ObservableObject {
             log("Layer 3: Caught packet [\(shortID)] originally from \(packet.senderID). TTL: \(packet.ttl)")
             
             if packet.targetID == nil || packet.targetID == self.myName {
-                onPayloadReceived?(packet.payload, packet.senderID, immediateSender, packet.targetID)
+                onPayloadReceived?(packet.payload, packet.senderID, immediateSender, packet.targetID, packet.payloadType)
             } else {
                 log("Layer 3: Packet targeted for \(packet.targetID!). I am just a middle-man. Skipping UI.")
             }
@@ -91,13 +98,14 @@ class MeshRoutingEngine: ObservableObject {
             }
         }
             
-        func broadcast(payload: Data, to target: String?) {
+        func broadcast(payload: Data, to target: String?, type: MeshPayloadType) {
             let newPacket = MeshPacket(
                 messageID: UUID(),
                 senderID: self.myName,
                 targetID: target,
                 ttl: 3,
-                payload: payload
+                payload: payload,
+                payloadType: type
             )
             
             registerMessageSeen(newPacket.messageID)
@@ -107,10 +115,28 @@ class MeshRoutingEngine: ObservableObject {
             transport.broadcastToNeighbors(data: rawData)
         }
         
+        func broadcastLiveAudio(payload: Data, to target: String?) {
+            let newPacket = MeshPacket(
+                messageID: UUID(),
+                senderID: self.myName,
+                targetID: target,
+                ttl: 5,
+                payload: payload,
+                payloadType: .liveAudio
+            )
+            registerMessageSeen(newPacket.messageID)
+            guard let rawData = try? JSONEncoder().encode(newPacket) else { return }
+            transport.broadcastUnreliableToNeighbors(data: rawData)
+        }
+        
         private func forwardToMesh(packet: MeshPacket, excluding: String) {
             guard let rawData = try? JSONEncoder().encode(packet) else { return }
             log("Layer 3: Forwarding [\(packet.messageID.uuidString.prefix(4))] -> TTL: \(packet.ttl) (Skipping \(excluding))")
-            transport.broadcastToNeighbors(data: rawData, excluding: excluding)
+            if packet.payloadType == .liveAudio {
+                transport.broadcastUnreliableToNeighbors(data: rawData, excluding: excluding)
+            } else {
+                transport.broadcastToNeighbors(data: rawData, excluding: excluding)
+            }
         }
     
     private func registerMessageSeen(_ id: UUID) {

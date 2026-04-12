@@ -5,6 +5,9 @@ import AVFoundation
 struct ContentView: View {
     @StateObject var networkManager = MeshRoutingEngine()
     @StateObject var audioPipeline = AudioPipelineEngine()
+    @StateObject var metrics = MetricsEngine()
+
+    @State private var showingReport = false
     
     @State private var hasMicPermission = false
     @State private var showingPermissionAlert = false
@@ -72,6 +75,39 @@ struct ContentView: View {
                     }
                 }
                 
+                // Live metrics bar
+                VStack(spacing: 6) {
+                    HStack(spacing: 0) {
+                        LiveMetricCell(label: "Sent", value: "\(metrics.audioSentCount)")
+                        Divider().frame(height: 28)
+                        LiveMetricCell(label: "Rcvd", value: "\(metrics.audioReceived.count)")
+                        Divider().frame(height: 28)
+                        LiveMetricCell(label: "Avg Lat", value: {
+                            let lats = metrics.audioReceived.map(\.latencyMs)
+                            guard !lats.isEmpty else { return "—" }
+                            return String(format: "%.0f ms", lats.reduce(0, +) / Double(lats.count))
+                        }())
+                        Divider().frame(height: 28)
+                        LiveMetricCell(label: "Avg Hops", value: {
+                            guard !metrics.audioReceived.isEmpty else { return "—" }
+                            let avg = Double(metrics.audioReceived.map(\.hopCount).reduce(0, +)) / Double(metrics.audioReceived.count)
+                            return String(format: "%.1f", avg)
+                        }())
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 6)
+                    .background(Color(.secondarySystemBackground))
+                    .cornerRadius(10)
+
+                    Button(action: { showingReport = true }) {
+                        Label("Session Report", systemImage: "chart.bar.doc.horizontal")
+                            .font(.subheadline)
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                }
+                .padding(.horizontal)
+
                 VStack(alignment: .leading) {
                     Text("System Logs:")
                         .font(.caption)
@@ -79,7 +115,7 @@ struct ContentView: View {
                     
                     ScrollView {
                         VStack(alignment: .leading) {
-                            ForEach(networkManager.debugLogs, id: \.self) { log in
+                            ForEach(Array(networkManager.debugLogs.enumerated()), id: \.offset) { _, log in
                                 Text(log)
                                     .font(.system(size: 10, design: .monospaced))
                                     .foregroundColor(.white)
@@ -182,6 +218,9 @@ struct ContentView: View {
             }
             .padding(.top)
         }
+        .sheet(isPresented: $showingReport) {
+            MetricsReportView(report: metrics.generateReport(), onReset: { metrics.reset() })
+        }
         .alert(isPresented: $showingPermissionAlert) {
             Alert(
                 title: Text("Microphone Access Required"),
@@ -197,15 +236,20 @@ struct ContentView: View {
             }
             
             audioPipeline.onAudioPacketReady = { packetData in
+                if let packet = AudioPacket.deserialize(from: packetData) {
+                    metrics.recordAudioSent()
+                    _ = packet
+                }
                 networkManager.broadcast(payload: packetData, to: nil)
             }
-            
-            networkManager.onPayloadReceived = { payloadData, originalSender, immediateRelayer, targetID in
-                
-                if let _ = AudioPacket.deserialize(from: payloadData) {
+
+            networkManager.onPayloadReceived = { payloadData, originalSender, immediateRelayer, targetID, hopCount in
+
+                if let audioPacket = AudioPacket.deserialize(from: payloadData) {
                     audioPipeline.receiveAudioData(payloadData, from: originalSender)
-                }
-                else if let decodedText = String(data: payloadData, encoding: .utf8) {
+                    metrics.recordAudioReceived(packet: audioPacket, hopCount: hopCount, bytes: payloadData.count)
+                } else if let decodedText = String(data: payloadData, encoding: .utf8) {
+                    metrics.recordTextReceived(senderID: originalSender, hopCount: hopCount, bytes: payloadData.count)
                     DispatchQueue.main.async {
                         if originalSender == immediateRelayer {
                             self.receivedMessage = "[\(originalSender)]: \(decodedText)"
@@ -216,5 +260,24 @@ struct ContentView: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Live Metric Cell
+
+private struct LiveMetricCell: View {
+    let label: String
+    let value: String
+
+    var body: some View {
+        VStack(spacing: 2) {
+            Text(value)
+                .font(.system(.subheadline, design: .monospaced))
+                .bold()
+            Text(label)
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity)
     }
 }

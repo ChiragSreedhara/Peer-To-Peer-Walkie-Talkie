@@ -28,7 +28,7 @@ class MultipeerManager: NSObject, ObservableObject {
     
     func startNetworking(as name: String, ignoring: [String] = []) {
         self.myPeerId = MCPeerID(displayName: name)
-        self.ignoreList = ignoring
+        self.ignoreList = ignoring.map { $0.lowercased() }
         
         session = MCSession(peer: myPeerId, securityIdentity: nil, encryptionPreference: .none)
         session.delegate = self
@@ -49,7 +49,10 @@ class MultipeerManager: NSObject, ObservableObject {
     }
     
     func broadcastToNeighbors(data: Data, excluding excludedPeerName: String? = nil) {
-        let targetPeers = session.connectedPeers.filter { $0.displayName != excludedPeerName }
+        let targetPeers = session.connectedPeers.filter {
+            $0.displayName.lowercased() != excludedPeerName?.lowercased() &&
+            !ignoreList.contains($0.displayName.lowercased())
+        }
         guard !targetPeers.isEmpty else { return }
         
         DispatchQueue.global(qos: .userInitiated).async {
@@ -81,8 +84,11 @@ class MultipeerManager: NSObject, ObservableObject {
 extension MultipeerManager: MCSessionDelegate, MCNearbyServiceAdvertiserDelegate, MCNearbyServiceBrowserDelegate {
     
     func browser(_ browser: MCNearbyServiceBrowser, foundPeer peerID: MCPeerID, withDiscoveryInfo info: [String : String]?) {
-        if ignoreList.contains(peerID.displayName) { return }
-        
+        if ignoreList.contains(peerID.displayName.lowercased()) {
+            onDebugLog?("Layer 4: 🛑 Ignoring \(peerID.displayName) (in distance list). No invite sent.")
+            return
+        }
+
         if myPeerId.hashValue > peerID.hashValue {
             onDebugLog?("Layer 4: Found \(peerID.displayName). Priority high, inviting...")
             browser.invitePeer(peerID, to: session, withContext: nil, timeout: 30)
@@ -92,7 +98,8 @@ extension MultipeerManager: MCSessionDelegate, MCNearbyServiceAdvertiserDelegate
     }
     
     func advertiser(_ advertiser: MCNearbyServiceAdvertiser, didReceiveInvitationFromPeer peerID: MCPeerID, withContext context: Data?, invitationHandler: @escaping (Bool, MCSession?) -> Void) {
-        if ignoreList.contains(peerID.displayName) {
+        if ignoreList.contains(peerID.displayName.lowercased()) {
+            onDebugLog?("Layer 4: 🛑 Rejected invitation from \(peerID.displayName) (in distance list).")
             invitationHandler(false, nil)
             return
         }
@@ -102,6 +109,10 @@ extension MultipeerManager: MCSessionDelegate, MCNearbyServiceAdvertiserDelegate
     }
     
     func session(_ session: MCSession, didReceive data: Data, fromPeer peerID: MCPeerID) {
+        if ignoreList.contains(peerID.displayName.lowercased()) {
+            onDebugLog?("Layer 4: 🛑 Dropped data from \(peerID.displayName) — in distance list.")
+            return
+        }
         onDebugLog?("Layer 4: Caught \(data.count) bytes from immediate neighbor \(peerID.displayName)")
         onPacketReceived?(data, peerID.displayName)
     }
@@ -110,6 +121,10 @@ extension MultipeerManager: MCSessionDelegate, MCNearbyServiceAdvertiserDelegate
         DispatchQueue.main.async {
             switch state {
             case .connected:
+                if self.ignoreList.contains(peerID.displayName.lowercased()) {
+                    self.onDebugLog?("Layer 4: 🛑 \(peerID.displayName) joined via relay session but is in distance list. Blocking.")
+                    return
+                }
                 if !self.connectedPeers.contains(peerID) {
                     self.connectedPeers.append(peerID)
                     self.onDebugLog?("Layer 4: 🟢 \(peerID.displayName) connected!")

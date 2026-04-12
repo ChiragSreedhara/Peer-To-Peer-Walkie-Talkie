@@ -26,6 +26,8 @@ final class AudioPipelineEngine: ObservableObject {
     // NEW: The Batching Tray
     private var batchedFrames: [Data] = []
     private let framesPerBatch = 25
+    private var emptyDrainCount = 0
+    private let emptyDrainThreshold = 25 // 25 * 20ms = 500ms of silence before stopping
     
     init() {
         configureAudioSession()
@@ -55,8 +57,7 @@ final class AudioPipelineEngine: ObservableObject {
         
         leftoverSamples.removeAll()
         batchedFrames.removeAll()
-        sequenceCounter = 0
-        
+
         inputNode.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { [weak self] (buffer, _) in
             guard let self = self else { return }
             
@@ -169,6 +170,7 @@ final class AudioPipelineEngine: ObservableObject {
     
     private func startPlaybackTimerIfNeeded() {
         guard playbackTimer == nil else { return }
+        emptyDrainCount = 0
         DispatchQueue.main.async { self.isReceiving = true }
         
         if !playbackEngine.isRunning {
@@ -198,12 +200,17 @@ final class AudioPipelineEngine: ObservableObject {
         for (_, buffer) in jitterBuffers {
             guard let frameData = buffer.dequeueFrame() else { continue }
             anyActive = true
-            
+
             guard let pcmBuffer = codec.decode(compressedData: frameData) else { continue }
             playerNode.scheduleBuffer(pcmBuffer, completionHandler: nil)
         }
-        
-        if !anyActive { stopPlaybackTimer() }
+
+        if anyActive {
+            emptyDrainCount = 0
+        } else {
+            emptyDrainCount += 1
+            if emptyDrainCount >= emptyDrainThreshold { stopPlaybackTimer() }
+        }
     }
     
     private func jitterBufferFor(sender: String) -> JitterBuffer {

@@ -16,7 +16,9 @@ class MultipeerManager: NSObject, ObservableObject {
     
    
     private var isRestartingScanner = false
-    
+    private var isStopped = false
+    private var reconciliationTimer: Timer?
+
     @Published var connectedPeers: [MCPeerID] = []
     
     var onPacketReceived: ((Data, String) -> Void)?
@@ -27,6 +29,7 @@ class MultipeerManager: NSObject, ObservableObject {
     }
     
     func startNetworking(as name: String, ignoring: [String] = []) {
+        self.isStopped = false
         self.myPeerId = MCPeerID(displayName: name)
         self.ignoreList = ignoring.map { $0.lowercased() }
         
@@ -46,8 +49,45 @@ class MultipeerManager: NSObject, ObservableObject {
         if !ignoreList.isEmpty {
             onDebugLog?("Layer 4: 🛑 Simulating distance. Ignoring: \(ignoreList.joined(separator: ", "))")
         }
+
+        // Periodically reconcile our peer list against MPC's ground truth
+        reconciliationTimer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { [weak self] _ in
+            guard let self = self else { return }
+            DispatchQueue.main.async {
+                let mpcPeerNames = Set(self.session.connectedPeers.map(\.displayName))
+                let stale = self.connectedPeers.filter { !mpcPeerNames.contains($0.displayName) }
+                for ghost in stale {
+                    self.onDebugLog?("Layer 4: 👻 Removing ghost peer \(ghost.displayName) (not in MPC session).")
+                }
+                self.connectedPeers.removeAll { !mpcPeerNames.contains($0.displayName) }
+            }
+        }
     }
     
+    func stopNetworking() {
+        isStopped = true
+        advertiser?.stopAdvertisingPeer()
+        browser?.stopBrowsingForPeers()
+        session?.disconnect()
+        reconciliationTimer?.invalidate()
+        // Nil out to prevent MPC from reconnecting through stale objects
+        advertiser = nil
+        browser = nil
+        session = nil
+        DispatchQueue.main.async {
+            self.connectedPeers.removeAll()
+        }
+        onDebugLog?("Layer 4: Radios stopped. Disconnected from mesh.")
+    }
+
+    func restartScanning() {
+        browser?.stopBrowsingForPeers()
+        advertiser?.stopAdvertisingPeer()
+        browser?.startBrowsingForPeers()
+        advertiser?.startAdvertisingPeer()
+        onDebugLog?("Layer 4: 🔄 Scanner and advertiser restarted fresh.")
+    }
+
     func broadcastToNeighbors(data: Data, excluding excludedPeerName: String? = nil) {
         let targetPeers = session.connectedPeers.filter {
             $0.displayName.lowercased() != excludedPeerName?.lowercased() &&
@@ -64,8 +104,10 @@ class MultipeerManager: NSObject, ObservableObject {
         }
     }
     private func rebuildSession() {
+        guard !isStopped else { return }
         session.disconnect()
-        
+        reconciliationTimer?.invalidate()
+
         advertiser.stopAdvertisingPeer()
         browser.stopBrowsingForPeers()
         
@@ -84,12 +126,13 @@ class MultipeerManager: NSObject, ObservableObject {
 extension MultipeerManager: MCSessionDelegate, MCNearbyServiceAdvertiserDelegate, MCNearbyServiceBrowserDelegate {
     
     func browser(_ browser: MCNearbyServiceBrowser, foundPeer peerID: MCPeerID, withDiscoveryInfo info: [String : String]?) {
+        guard !isStopped else { return }
         if ignoreList.contains(peerID.displayName.lowercased()) {
             onDebugLog?("Layer 4: 🛑 Ignoring \(peerID.displayName) (in distance list). No invite sent.")
             return
         }
 
-        if myPeerId.hashValue > peerID.hashValue {
+        if myPeerId.displayName > peerID.displayName {
             onDebugLog?("Layer 4: Found \(peerID.displayName). Priority high, inviting...")
             browser.invitePeer(peerID, to: session, withContext: nil, timeout: 30)
         } else {
@@ -98,6 +141,10 @@ extension MultipeerManager: MCSessionDelegate, MCNearbyServiceAdvertiserDelegate
     }
     
     func advertiser(_ advertiser: MCNearbyServiceAdvertiser, didReceiveInvitationFromPeer peerID: MCPeerID, withContext context: Data?, invitationHandler: @escaping (Bool, MCSession?) -> Void) {
+        guard !isStopped else {
+            invitationHandler(false, nil)
+            return
+        }
         if ignoreList.contains(peerID.displayName.lowercased()) {
             onDebugLog?("Layer 4: 🛑 Rejected invitation from \(peerID.displayName) (in distance list).")
             invitationHandler(false, nil)
@@ -109,6 +156,7 @@ extension MultipeerManager: MCSessionDelegate, MCNearbyServiceAdvertiserDelegate
     }
     
     func session(_ session: MCSession, didReceive data: Data, fromPeer peerID: MCPeerID) {
+        guard !isStopped else { return }
         if ignoreList.contains(peerID.displayName.lowercased()) {
             onDebugLog?("Layer 4: 🛑 Dropped data from \(peerID.displayName) — in distance list.")
             return
@@ -118,6 +166,7 @@ extension MultipeerManager: MCSessionDelegate, MCNearbyServiceAdvertiserDelegate
     }
     
     func session(_ session: MCSession, peer peerID: MCPeerID, didChange state: MCSessionState) {
+        guard !isStopped else { return }
         DispatchQueue.main.async {
             switch state {
             case .connected:
@@ -125,12 +174,17 @@ extension MultipeerManager: MCSessionDelegate, MCNearbyServiceAdvertiserDelegate
                     self.onDebugLog?("Layer 4: 🛑 \(peerID.displayName) joined via relay session but is in distance list. Blocking.")
                     return
                 }
-                if !self.connectedPeers.contains(peerID) {
-                    self.connectedPeers.append(peerID)
+                // Remove any stale entry with same name (old MCPeerID object from a previous connection)
+                let hadStale = self.connectedPeers.contains { $0.displayName == peerID.displayName && $0 != peerID }
+                self.connectedPeers.removeAll { $0.displayName == peerID.displayName }
+                self.connectedPeers.append(peerID)
+                if hadStale {
+                    self.onDebugLog?("Layer 4: 🟢 \(peerID.displayName) reconnected (replaced stale entry).")
+                } else {
                     self.onDebugLog?("Layer 4: 🟢 \(peerID.displayName) connected!")
                 }
             case .notConnected:
-                self.connectedPeers.removeAll { $0 == peerID }
+                self.connectedPeers.removeAll { $0 == peerID || $0.displayName == peerID.displayName }
                 self.onDebugLog?("Layer 4: 🔴 \(peerID.displayName) disconnected.")
                 
                 if self.connectedPeers.isEmpty {

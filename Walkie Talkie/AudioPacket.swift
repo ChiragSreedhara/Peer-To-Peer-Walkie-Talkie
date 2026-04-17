@@ -5,7 +5,8 @@ struct AudioPacket: Codable {
     let timestamp: UInt64
     let frameDurationMs: UInt16
     let senderID: String
-    
+    let totalSent: UInt32
+
     let opusFrames: [Data]
     
     func serialize() -> Data? {

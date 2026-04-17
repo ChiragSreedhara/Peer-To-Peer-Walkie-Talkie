@@ -40,6 +40,21 @@ class MeshRoutingEngine: ObservableObject {
         log("Layer 3: Booting up Mesh Node as '\(name)'...")
         transport.startNetworking(as: name, ignoring: ignoreArray)
     }
+
+    func stopMesh() {
+        log("Layer 3: Shutting down Mesh Node...")
+        transport.stopNetworking()
+        seenMessageIDs.removeAll()
+    }
+
+    func clearMesh() {
+        log("Layer 3: Clearing mesh state...")
+        seenMessageIDs.removeAll()
+        DispatchQueue.main.async {
+            self.debugLogs.removeAll()
+        }
+        transport.restartScanning()
+    }
     
     private func setupTransportInteractions() {
         transport.onDebugLog = { [weak self] message in

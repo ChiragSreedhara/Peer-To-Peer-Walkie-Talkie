@@ -8,6 +8,7 @@ final class MetricsEngine: ObservableObject {
     struct AudioRecord {
         let senderID: String
         let sequenceNumber: UInt32
+        let totalSent: UInt32
         let latencyMs: Double
         let hopCount: Int
         let bytes: Int
@@ -83,6 +84,7 @@ final class MetricsEngine: ObservableObject {
         let record = AudioRecord(
             senderID: packet.senderID,
             sequenceNumber: packet.sequenceNumber,
+            totalSent: packet.totalSent,
             latencyMs: latencyMs,
             hopCount: hopCount,
             bytes: bytes
@@ -154,10 +156,9 @@ final class MetricsEngine: ObservableObject {
         for id in senderIDs {
             let recs = audioReceived.filter { $0.senderID == id }
             let lats = recs.map(\.latencyMs)
-            let seqs = recs.map(\.sequenceNumber)
             let expected: Int
-            if let minSeq = seqs.min(), let maxSeq = seqs.max() {
-                expected = Int(maxSeq - minSeq) + 1
+            if let maxTotalSent = recs.map(\.totalSent).max() {
+                expected = Int(maxTotalSent)
             } else {
                 expected = recs.count
             }

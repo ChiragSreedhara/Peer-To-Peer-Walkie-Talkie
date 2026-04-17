@@ -20,6 +20,7 @@ final class AudioPipelineEngine: ObservableObject {
     private let audioQueue = DispatchQueue(label: "com.walkietalkie.audio", qos: .userInteractive)
     
     private var sequenceCounter: UInt32 = 0
+    func resetSequenceCounter() { sequenceCounter = 0 }
     private var playbackTimer: DispatchSourceTimer?
     private let playbackQueue = DispatchQueue(label: "com.walkietalkie.playback", qos: .userInteractive)
     
@@ -99,14 +100,15 @@ final class AudioPipelineEngine: ObservableObject {
                         self.batchedFrames.append(compressedData)
                         
                         if self.batchedFrames.count >= self.framesPerBatch {
+                            self.sequenceCounter += 1
                             let packet = AudioPacket(
-                                sequenceNumber: self.sequenceCounter,
+                                sequenceNumber: self.sequenceCounter - 1,
                                 timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                                 frameDurationMs: AudioConstants.frameDurationMs,
                                 senderID: UIDevice.current.name,
+                                totalSent: self.sequenceCounter,
                                 opusFrames: self.batchedFrames // Send the whole batch
                             )
-                            self.sequenceCounter += 1
                             self.batchedFrames.removeAll() //empty the tray
                             
                             let serializedData = packet.serialize()
@@ -135,11 +137,13 @@ final class AudioPipelineEngine: ObservableObject {
         captureEngine.stop()
         
         if !batchedFrames.isEmpty {
+            sequenceCounter += 1
             let packet = AudioPacket(
-                sequenceNumber: sequenceCounter,
+                sequenceNumber: sequenceCounter - 1,
                 timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                 frameDurationMs: AudioConstants.frameDurationMs,
                 senderID: UIDevice.current.name,
+                totalSent: sequenceCounter,
                 opusFrames: batchedFrames
             )
             if let serialized = packet.serialize() {

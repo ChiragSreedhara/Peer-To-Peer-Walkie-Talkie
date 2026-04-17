@@ -58,6 +58,21 @@ struct ContentView: View {
                                 .font(.caption)
                                 .foregroundColor(.red)
                         }
+                        HStack(spacing: 12) {
+                            Button("Clear Mesh") {
+                                networkManager.clearMesh()
+                            }
+                            .buttonStyle(.bordered)
+                            .tint(.orange)
+
+                            Button("Disconnect") {
+                                networkManager.stopMesh()
+                                isMeshStarted = false
+                            }
+                            .buttonStyle(.bordered)
+                            .tint(.red)
+                        }
+                        .padding(.top, 4)
                     }
                 }
                 
@@ -81,6 +96,20 @@ struct ContentView: View {
                         LiveMetricCell(label: "Sent", value: "\(metrics.audioSentCount)")
                         Divider().frame(height: 28)
                         LiveMetricCell(label: "Rcvd", value: "\(metrics.audioReceived.count)")
+                        Divider().frame(height: 28)
+                        LiveMetricCell(label: "Delivery", value: {
+                            let byS = Dictionary(grouping: metrics.audioReceived, by: \.senderID)
+                            guard !byS.isEmpty else { return "—" }
+                            var totalExp = 0, totalRcv = 0
+                            for (_, recs) in byS {
+                                if let maxTS = recs.map(\.totalSent).max() {
+                                    totalExp += Int(maxTS)
+                                }
+                                totalRcv += recs.count
+                            }
+                            guard totalExp > 0 else { return "—" }
+                            return String(format: "%.1f%%", min(100.0, Double(totalRcv) / Double(totalExp) * 100))
+                        }())
                         Divider().frame(height: 28)
                         LiveMetricCell(label: "Avg Lat", value: {
                             let lats = metrics.audioReceived.map(\.latencyMs)

@@ -92,6 +92,20 @@ final class MetricsEngine: ObservableObject {
         DispatchQueue.main.async { self.audioReceived.append(record) }
     }
 
+    func recordAsyncAudioReceived(packet: AsyncAudioPacket, hopCount: Int, bytes: Int) {
+        let nowMs = UInt64(Date().timeIntervalSince1970 * 1000)
+        let latencyMs = max(0.0, Double(nowMs) - Double(packet.timestamp))
+        let record = AudioRecord(
+            senderID: packet.senderID,
+            sequenceNumber: packet.totalSent - 1,
+            totalSent: packet.totalSent,
+            latencyMs: latencyMs,
+            hopCount: hopCount,
+            bytes: bytes
+        )
+        DispatchQueue.main.async { self.audioReceived.append(record) }
+    }
+
     func recordTextReceived(senderID: String, hopCount: Int, bytes: Int) {
         let record = TextRecord(senderID: senderID, hopCount: hopCount, bytes: bytes)
         DispatchQueue.main.async { self.textReceived.append(record) }

@@ -11,7 +11,7 @@ import SwiftUI
 struct Walkie_TalkieApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            AppRootView()
         }
     }
 }

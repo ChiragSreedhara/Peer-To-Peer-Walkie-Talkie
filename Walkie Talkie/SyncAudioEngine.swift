@@ -2,7 +2,7 @@ import AVFoundation
 import UIKit
 import Combine
 
-final class AudioPipelineEngine: ObservableObject {
+final class SyncAudioEngine: ObservableObject {
     
     @Published private(set) var isTransmitting = false
     @Published private(set) var isReceiving = false

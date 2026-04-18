@@ -2,9 +2,9 @@ import SwiftUI
 import Combine
 import AVFoundation
 
-struct ContentView: View {
+struct SyncContentView: View {
     @StateObject var networkManager = MeshRoutingEngine()
-    @StateObject var audioPipeline = AudioPipelineEngine()
+    @StateObject var audioPipeline = SyncAudioEngine()
     @StateObject var metrics = MetricsEngine()
 
     @State private var showingReport = false
@@ -12,13 +12,9 @@ struct ContentView: View {
     @State private var hasMicPermission = false
     @State private var showingPermissionAlert = false
     
-    @State private var userName: String = ContentView.generateRandomCallsign()
+    @State private var userName: String = SyncContentView.generateRandomCallsign()
     @State private var peersToIgnore: String = ""
     @State private var isMeshStarted: Bool = false
-    
-    @State private var messageToSend: String = ""
-    @State private var selectedTarget: String = "Everyone"
-    @State private var receivedMessage: String = "No messages yet"
     
     static func generateRandomCallsign() -> String {
         let nouns = ["Falcon", "Wolf", "Hawk", "Bear", "Fox", "Raven", "Snake", "Echo"]
@@ -160,53 +156,6 @@ struct ContentView: View {
                 }
                 .padding(.horizontal)
                 
-                VStack(alignment: .leading) {
-                    Text("Chat Inbox:")
-                        .font(.caption)
-                        .foregroundColor(.gray)
-                    
-                    Text(receivedMessage)
-                        .padding()
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.gray.opacity(0.2))
-                        .cornerRadius(8)
-                }
-                .padding(.horizontal)
-                
-                VStack(spacing: 10) {
-                    HStack {
-                        Text("Send to:")
-                        Picker("Target", selection: $selectedTarget) {
-                            Text("Everyone").tag("Everyone")
-                            ForEach(networkManager.connectedPeers, id: \.self) { peer in
-                                Text(peer).tag(peer)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        Spacer()
-                    }
-                    .padding(.horizontal)
-                    
-                    HStack {
-                        TextField("Type a message...", text: $messageToSend)
-                            .textFieldStyle(RoundedBorderTextFieldStyle())
-                        
-                        Button("Send") {
-                            guard !messageToSend.isEmpty, isMeshStarted else { return }
-                            if let rawBytes = messageToSend.data(using: .utf8) {
-                                let target: String? = selectedTarget == "Everyone" ? nil : selectedTarget
-                                networkManager.broadcast(payload: rawBytes, to: target)
-                                messageToSend = ""
-                            }
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(!isMeshStarted)
-                    }
-                    .padding(.horizontal)
-                }
-                
-                Divider()
-                
                 VStack(spacing: 8) {
                     Text(audioPipeline.isTransmitting ? "Release to stop" : "Hold to talk")
                         .font(.caption)
@@ -277,15 +226,6 @@ struct ContentView: View {
                 if let audioPacket = AudioPacket.deserialize(from: payloadData) {
                     audioPipeline.receiveAudioData(payloadData, from: originalSender)
                     metrics.recordAudioReceived(packet: audioPacket, hopCount: hopCount, bytes: payloadData.count)
-                } else if let decodedText = String(data: payloadData, encoding: .utf8) {
-                    metrics.recordTextReceived(senderID: originalSender, hopCount: hopCount, bytes: payloadData.count)
-                    DispatchQueue.main.async {
-                        if originalSender == immediateRelayer {
-                            self.receivedMessage = "[\(originalSender)]: \(decodedText)"
-                        } else {
-                            self.receivedMessage = "[\(originalSender) via \(immediateRelayer)]: \(decodedText)"
-                        }
-                    }
                 }
             }
         }

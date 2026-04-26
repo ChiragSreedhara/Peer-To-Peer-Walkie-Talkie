@@ -56,6 +56,11 @@ class MeshRoutingEngine: ObservableObject {
         transport.restartScanning()
     }
     
+    func stopMesh() {
+            transport.stopNetworking()
+            log("Layer 3: Radios powered down.")
+        }
+    
     private func setupTransportInteractions() {
         transport.onDebugLog = { [weak self] message in
             self?.log(message)

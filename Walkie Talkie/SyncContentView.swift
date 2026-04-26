@@ -19,29 +19,75 @@ struct SyncContentView: View {
     static func generateRandomCallsign() -> String {
         let nouns = ["Falcon", "Wolf", "Hawk", "Bear", "Fox", "Raven", "Snake", "Echo"]
         let randomNum = Int.random(in: 1...9)
-        
         return "\(nouns.randomElement()!)\(randomNum)"
     }
-    
+
     var body: some View {
-        ScrollView {
-            VStack(spacing: 25) {
-                
-                if !isMeshStarted {
-                    VStack(spacing: 10) {
-                        TextField("Enter your name", text: $userName)
-                            .textFieldStyle(.roundedBorder)
+        ZStack {
+            Color.wtBackground.ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                topBar
+                    .padding(.horizontal, 20)
+                    .padding(.top, 12)
+                    .padding(.bottom, 16)
+
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 16) {
+                        connectionStatusBadge
                         
-                        TextField("Simulate distance: Ignore peers (e.g. Alice, Bob)", text: $peersToIgnore)
-                            .textFieldStyle(.roundedBorder)
-                        
-                        Button("Start Mesh") {
-                            guard !userName.isEmpty else { return }
-                            networkManager.startMesh(withName: userName, ignoring: peersToIgnore)
-                            isMeshStarted = true
+                        if isPoweredOn {
+                            dmSection
+                            inboxSection
                         }
-                        .buttonStyle(.borderedProminent)
-                        .padding(.top, 5)
+
+                        Spacer(minLength: 32)
+
+                        pttSection
+
+                        Spacer(minLength: 24)
+
+                        debugSection
+
+                        Spacer(minLength: 32)
+                    }
+                    .padding(.horizontal, 20)
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+        .onAppear {
+            requestMicPermission()
+            wireAudioPipeline()
+        }
+        .onChange(of: audioPipeline.isPlaying) { isPlaying in
+            if !isPlaying {
+                playingMessageID = nil
+            }
+        }
+        .alert("Microphone Access Needed", isPresented: $showingPermissionAlert) {
+            Button("Open Settings") {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Please allow microphone access in Settings to use Push to Talk.")
+        }
+    }
+
+    private var topBar: some View {
+        HStack {
+            HStack(spacing: 8) {
+                Button {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
+                        isPoweredOn.toggle()
+                        if isPoweredOn {
+                            networkManager.startMesh(withName: userName, ignoring: peersToIgnore)
+                        } else {
+                            networkManager.stopMesh()
+                        }
                     }
                     .padding(.horizontal)
                 } else {
@@ -71,20 +117,97 @@ struct SyncContentView: View {
                         .padding(.top, 4)
                     }
                 }
-                
-                VStack {
-                    Text("Connected Adjacent Peers: \(networkManager.connectedPeers.count)")
-                        .font(.subheadline)
-                        .foregroundColor(networkManager.connectedPeers.isEmpty ? .red : .green)
-                    
-                    HStack {
-                        ForEach(networkManager.connectedPeers, id: \.self) { peerName in
-                            Text("📱 \(peerName)")
-                                .font(.caption)
-                                .foregroundColor(.blue)
-                        }
+
+                if !isPoweredOn {
+                    Text("Offline")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.red)
+                }
+            }
+
+            Spacer()
+
+            if isEditingName {
+                HStack(spacing: 6) {
+                    TextField("Your name", text: $editNameTemp)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.white)
+                        .frame(minWidth: 80)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(Color.wtSurface)
+                        .clipShape(Capsule())
+
+                    Button {
+                        let trimmed = editNameTemp.trimmingCharacters(in: .whitespaces)
+                        if !trimmed.isEmpty { userName = trimmed }
+                        isEditingName = false
+                    } label: {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 26))
+                            .foregroundStyle(wtGradient)
                     }
                 }
+            } else {
+                Button {
+                    guard !isPoweredOn else { return }
+                    editNameTemp = userName
+                    isEditingName = true
+                } label: {
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(isPoweredOn ? Color.wtGreen : Color.gray)
+                            .frame(width: 7, height: 7)
+                        Text(userName)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.white)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(Color.wtSurface)
+                    .clipShape(Capsule())
+                    .overlay(Capsule().stroke(Color.wtBorder, lineWidth: 1))
+                }
+            }
+        }
+    }
+
+    private var connectionStatusBadge: some View {
+        HStack(spacing: 8) {
+            if !isPoweredOn {
+                Image(systemName: "antenna.radiowaves.left.and.right.slash")
+                    .font(.system(size: 13))
+                    .foregroundColor(.wtDimText)
+            } else if !networkManager.connectedPeers.isEmpty {
+                Image(systemName: "person.2.fill")
+                    .font(.system(size: 13))
+                    .foregroundColor(.wtGreen)
+            } else {
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle(tint: .wtDimText))
+                    .scaleEffect(0.75)
+            }
+
+            Text(isPoweredOn
+                 ? (!networkManager.connectedPeers.isEmpty
+                    ? "Connected · \(networkManager.connectedPeers.count) peers"
+                    : "Searching for peers…")
+                 : "Turn on to connect")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(!networkManager.connectedPeers.isEmpty ? .wtGreen : .wtDimText)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(Capsule().fill(!networkManager.connectedPeers.isEmpty ? Color.wtGreen.opacity(0.10) : Color.white.opacity(0.05)))
+        .overlay(Capsule().stroke(!networkManager.connectedPeers.isEmpty ? Color.wtGreen.opacity(0.30) : Color.white.opacity(0.08), lineWidth: 1))
+    }
+
+    private var dmSection: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Text("Target:")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.wtPurple)
                 
                 // Live metrics bar
                 VStack(spacing: 6) {
@@ -143,8 +266,7 @@ struct SyncContentView: View {
                             ForEach(Array(networkManager.debugLogs.enumerated()), id: \.offset) { _, log in
                                 Text(log)
                                     .font(.system(size: 10, design: .monospaced))
-                                    .foregroundColor(.white)
-                                    .padding(.bottom, 1)
+                                    .foregroundColor(Color.wtGreen.opacity(0.75))
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -227,7 +349,37 @@ struct SyncContentView: View {
                     audioPipeline.receiveAudioData(payloadData, from: originalSender)
                     metrics.recordAudioReceived(packet: audioPacket, hopCount: hopCount, bytes: payloadData.count)
                 }
+                .padding(10)
+                .background(Color.wtSurface)
+                .cornerRadius(12)
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.wtBorder, lineWidth: 1))
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
+        }
+    }
+
+    private func wireAudioPipeline() {
+        audioPipeline.onAudioPacketReady = { data in
+            let target: String? = selectedTarget == "Everyone" ? nil : selectedTarget
+            networkManager.broadcast(payload: data, to: target)
+        }
+
+        networkManager.onPayloadReceived = { payload, senderID, relayer, targetID in
+            let senderLabel = senderID == relayer ? senderID : "\(senderID) via \(relayer)"
+            
+            if let decodedText = String(data: payload, encoding: .utf8) {
+                let msg = MeshMessage(sender: senderLabel, text: decodedText, audioData: nil)
+                DispatchQueue.main.async { self.inboxMessages.insert(msg, at: 0) }
+            } else {
+                let msg = MeshMessage(sender: senderLabel, text: nil, audioData: payload)
+                DispatchQueue.main.async { self.inboxMessages.insert(msg, at: 0) }
+            }
+        }
+    }
+
+    private func requestMicPermission() {
+        AVAudioSession.sharedInstance().requestRecordPermission { granted in
+            DispatchQueue.main.async { self.hasMicPermission = granted }
         }
     }
 }

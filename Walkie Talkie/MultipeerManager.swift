@@ -101,7 +101,6 @@ class MultipeerManager: NSObject, ObservableObject {
                 self.onDebugLog?("Failed to blast the Voice pckts: \(error)")
             }
         }
-    }
     private func rebuildSession() {
         guard !isStopped else { return }
         session.disconnect()

@@ -1,20 +1,18 @@
+import Foundation
 import AVFoundation
-import UIKit
 import Combine
 
 final class SyncAudioEngine: ObservableObject {
     
     @Published private(set) var isTransmitting = false
-    @Published private(set) var isReceiving = false
+    @Published private(set) var isPlaying = false
     
     var onAudioPacketReady: ((Data) -> Void)?
     
-    private let captureEngine = AVAudioEngine()
-    private let playbackEngine = AVAudioEngine()
-    private let playerNode = AVAudioPlayerNode()
+    private var audioRecorder: AVAudioRecorder?
+    private var audioPlayer: AVAudioPlayer?
     
-    private let codec: AudioCodec = OpusCodecWrapper()
-    private var jitterBuffers: [String: JitterBuffer] = [:]
+    private let recordURL = FileManager.default.temporaryDirectory.appendingPathComponent("voicenote.m4a")
     
     private var leftoverSamples: [Float] = []
     private let audioQueue = DispatchQueue(label: "com.walkietalkie.audio", qos: .userInteractive)
@@ -31,21 +29,15 @@ final class SyncAudioEngine: ObservableObject {
     
     init() {
         configureAudioSession()
-        setupPlaybackEngine()
     }
     
     private func configureAudioSession() {
         let session = AVAudioSession.sharedInstance()
-        do {
-            try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetooth, .mixWithOthers])
-            try session.setPreferredSampleRate(AudioConstants.sampleRate)
-            try session.setPreferredIOBufferDuration(0.02)
-            try session.setActive(true)
-        } catch {
-            print("AudioPipeline: Failed to config session — \(error)")
-        }
+        try? session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetooth])
+        try? session.setActive(true)
     }
     
+    // MARK: - Sending
     func startTransmitting() {
         guard !isTransmitting else { return }
         
@@ -123,8 +115,14 @@ final class SyncAudioEngine: ObservableObject {
         }
         
         do {
-            try captureEngine.start()
+            audioRecorder = try AVAudioRecorder(url: recordURL, settings: settings)
+            audioRecorder?.delegate = self
+            
+            audioRecorder?.record(forDuration: 3.0)
+            
             DispatchQueue.main.async { self.isTransmitting = true }
+            audioPlayer?.stop()
+            DispatchQueue.main.async { self.isPlaying = false }
         } catch {
             print("AudioPipeline: unable to capture — \(error)")
         }
@@ -152,19 +150,19 @@ final class SyncAudioEngine: ObservableObject {
         }
         
         DispatchQueue.main.async { self.isTransmitting = false }
+        
+        guard flag, let data = try? Data(contentsOf: recordURL) else { return }
+        
+        DispatchQueue.global(qos: .userInitiated).async {
+            self.onAudioPacketReady?(data)
+        }
     }
     
-    func receiveAudioData(_ data: Data, from senderName: String) {
-        guard let packet = AudioPacket.deserialize(from: data) else { return }
-        let buffer = jitterBufferFor(sender: senderName)
-        buffer.insert(packet)
-        startPlaybackTimerIfNeeded()
-    }
-    
-    private func setupPlaybackEngine() {
-        playbackEngine.attach(playerNode)
-        let format = AudioConstants.pcmFormat
-        playbackEngine.connect(playerNode, to: playbackEngine.mainMixerNode, format: format)
+    func playVoiceNote(_ data: Data) {
+        if isPlaying {
+            audioPlayer?.stop()
+        }
+        
         do {
             try playbackEngine.start()
             playerNode.play()
@@ -180,16 +178,6 @@ final class SyncAudioEngine: ObservableObject {
             try? playbackEngine.start()
             playerNode.play()
         }
-        
-        let timer = DispatchSource.makeTimerSource(queue: playbackQueue)
-        let intervalMs = Int(AudioConstants.frameDurationMs)
-        timer.schedule(deadline: .now() + .milliseconds(intervalMs * 6), repeating: .milliseconds(intervalMs))
-        
-        timer.setEventHandler { [weak self] in
-            self?.drainBuffersAndPlay()
-        }
-        timer.resume()
-        playbackTimer = timer
     }
     
     private func stopPlaybackTimer() {

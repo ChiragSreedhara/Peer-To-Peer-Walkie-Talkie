@@ -16,11 +16,12 @@ class MeshRoutingEngine: ObservableObject {
     private var seenMessageIDs: Set<UUID> = []
     private var cancellables = Set<AnyCancellable>()
     private var myName: String = ""
+    private let meshTTL = 3
     
     @Published var connectedPeers: [String] = []
     @Published var debugLogs: [String] = []
     
-    var onPayloadReceived: ((Data, String, String, String?) -> Void)?
+    var onPayloadReceived: ((Data, String, String, String?, Int) -> Void)?
     
     init() {
         setupTransportInteractions()
@@ -36,8 +37,23 @@ class MeshRoutingEngine: ObservableObject {
         self.myName = name
         let ignoreArray = ignoring.split(separator: ",").map { String($0).trimmingCharacters(in: .whitespaces) }
         
-        log("Layer 3: Booting up Mesh Node as '\(name)'...")
+        log("Layer 3: Booting up as '\(name)'")
         transport.startNetworking(as: name, ignoring: ignoreArray)
+    }
+
+    func stopMesh() {
+        log("Layer 3: Shutting down user node")
+        transport.stopNetworking()
+        seenMessageIDs.removeAll()
+    }
+
+    func clearMesh() {
+        log("Layer 3: clearing mesh")
+        seenMessageIDs.removeAll()
+        DispatchQueue.main.async {
+            self.debugLogs.removeAll()
+        }
+        transport.restartScanning()
     }
     
     func stopMesh() {
@@ -75,8 +91,9 @@ class MeshRoutingEngine: ObservableObject {
             let shortID = packet.messageID.uuidString.prefix(4)
             log("Layer 3: Caught packet [\(shortID)] originally from \(packet.senderID). TTL: \(packet.ttl)")
             
+            let hopCount = meshTTL - packet.ttl
             if packet.targetID == nil || packet.targetID == self.myName {
-                onPayloadReceived?(packet.payload, packet.senderID, immediateSender, packet.targetID)
+                onPayloadReceived?(packet.payload, packet.senderID, immediateSender, packet.targetID, hopCount)
             } else {
                 log("Layer 3: Packet targeted for \(packet.targetID!). I am just a middle-man. Skipping UI.")
             }
@@ -96,7 +113,7 @@ class MeshRoutingEngine: ObservableObject {
                 messageID: UUID(),
                 senderID: self.myName,
                 targetID: target,
-                ttl: 3,
+                ttl: meshTTL,
                 payload: payload
             )
             

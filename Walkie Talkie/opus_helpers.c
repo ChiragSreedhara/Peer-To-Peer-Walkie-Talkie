@@ -1,10 +1,3 @@
-//
-//  opus_helpers.c
-//  Walkie Talkie
-//
-//  Created by Nicole Li on 4/5/26.
-//
-
 
 #include "opus_helpers.h"
 

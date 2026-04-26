@@ -33,7 +33,6 @@ struct MetricsReportView: View {
         }
     }
 
-    // MARK: - Sections
 
     private var overviewSection: some View {
         ReportCard(title: "Session Overview") {
@@ -99,7 +98,7 @@ struct MetricsReportView: View {
                     }
                     .padding(.top, hop == 0 ? 0 : 6)
 
-                    // Per-sender rows under this hop group
+                    // the rows under this hop group
                     ForEach(rowsForHop) { row in
                         HStack {
                             Text("from \(row.senderID)")
@@ -173,7 +172,7 @@ struct MetricsReportView: View {
     }
 }
 
-// MARK: - Reusable Components
+
 
 private struct ReportCard<Content: View>: View {
     let title: String

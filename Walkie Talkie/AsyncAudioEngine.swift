@@ -27,7 +27,6 @@ final class AsyncAudioEngine: NSObject, ObservableObject, AVAudioPlayerDelegate,
         try? session.setActive(true)
     }
     
-    // MARK: - Sending
     func startTransmitting() {
         guard !isTransmitting else { return }
         
@@ -41,14 +40,13 @@ final class AsyncAudioEngine: NSObject, ObservableObject, AVAudioPlayerDelegate,
         do {
             audioRecorder = try AVAudioRecorder(url: recordURL, settings: settings)
             audioRecorder?.delegate = self
-            
             audioRecorder?.record(forDuration: 3.0)
-            
+                    
             DispatchQueue.main.async { self.isTransmitting = true }
             audioPlayer?.stop()
-            DispatchQueue.main.async { self.isPlaying = false }
+            DispatchQueue.main.async { self.isPlaying =false }
         } catch {
-            print("AudioEngine: Failed to start recording - \(error)")
+            print("AudioEngine couldnt start recording. The error is \(error)")
         }
     }
     
@@ -64,7 +62,7 @@ final class AsyncAudioEngine: NSObject, ObservableObject, AVAudioPlayerDelegate,
 
         sentCount += 1
         let packet = AsyncAudioPacket(
-            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            timestamp: UInt64(Date().timeIntervalSince1970 *1000),
             senderID: UIDevice.current.name,
             totalSent: sentCount,
             audioData: audioData
@@ -73,7 +71,7 @@ final class AsyncAudioEngine: NSObject, ObservableObject, AVAudioPlayerDelegate,
         DispatchQueue.global(qos: .userInitiated).async {
             if let serialized = packet.serialize() {
                 self.onAudioPacketReady?(serialized)
-            }
+             }
         }
     }
     
@@ -85,9 +83,12 @@ final class AsyncAudioEngine: NSObject, ObservableObject, AVAudioPlayerDelegate,
         do {
             audioPlayer = try AVAudioPlayer(data: data)
             audioPlayer?.delegate = self
+            
+            
             audioPlayer?.prepareToPlay()
             audioPlayer?.play()
-            DispatchQueue.main.async { self.isPlaying = true }
+            
+            DispatchQueue.main.async { self.isPlaying =true }
         } catch {
             print("AudioEngine: Failed to play voice note - \(error)")
         }

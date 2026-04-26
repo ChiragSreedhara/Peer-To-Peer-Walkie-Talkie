@@ -15,7 +15,7 @@ final class JitterBuffer {
     init(maxDepth: Int = 10) {
         self.maxDepth = maxDepth
     }
-    
+     
     func insert(_ packet: AudioPacket) {
         queue.sync {
             if nextPlaybackSeq == nil {
@@ -39,7 +39,7 @@ final class JitterBuffer {
                     if pendingPackets.count > maxDepth {
                         let lowestAvailable = pendingPackets.keys.min()!
                         nextPlaybackSeq = lowestAvailable
-                        print("JitterBuffer: Healing gap. Jumping to \(lowestAvailable)")
+                        print("JitterBuffer, gap issues, to fix now Jumping to packet \(lowestAvailable)")
                     }
                     return nil
                 }

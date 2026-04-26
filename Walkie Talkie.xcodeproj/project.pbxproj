@@ -6,32 +6,13 @@
 	objectVersion = 77;
 	objects = {
 
-/* Begin PBXBuildFile section */
-		39B574302F8333AC00143229 /* Copus in Frameworks */ = {isa = PBXBuildFile; productRef = 39B5742F2F8333AC00143229 /* Copus */; };
-		39B574322F8333AC00143229 /* Opus in Frameworks */ = {isa = PBXBuildFile; productRef = 39B574312F8333AC00143229 /* Opus */; };
-/* End PBXBuildFile section */
-
 /* Begin PBXFileReference section */
 		466E47912F7F843C00EA2DE7 /* Walkie Talkie.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Walkie Talkie.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
-/* Begin PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
-		39B574432F833AFD00143229 /* Exceptions for "Walkie Talkie" folder in "Copy Bundle Resources" phase from "Walkie Talkie" target */ = {
-			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
-			buildPhase = 466E478F2F7F843C00EA2DE7 /* Resources */;
-			membershipExceptions = (
-				opus_helpers.c,
-				opus_helpers.h,
-			);
-		};
-/* End PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
-
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		466E47932F7F843C00EA2DE7 /* Walkie Talkie */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				39B574432F833AFD00143229 /* Exceptions for "Walkie Talkie" folder in "Copy Bundle Resources" phase from "Walkie Talkie" target */,
-			);
 			path = "Walkie Talkie";
 			sourceTree = "<group>";
 		};
@@ -42,8 +23,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				39B574302F8333AC00143229 /* Copus in Frameworks */,
-				39B574322F8333AC00143229 /* Opus in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -86,8 +65,6 @@
 			);
 			name = "Walkie Talkie";
 			packageProductDependencies = (
-				39B5742F2F8333AC00143229 /* Copus */,
-				39B574312F8333AC00143229 /* Opus */,
 			);
 			productName = "Walkie Talkie";
 			productReference = 466E47912F7F843C00EA2DE7 /* Walkie Talkie.app */;
@@ -105,7 +82,6 @@
 				TargetAttributes = {
 					466E47902F7F843C00EA2DE7 = {
 						CreatedOnToolsVersion = 26.4;
-						LastSwiftMigration = 2640;
 					};
 				};
 			};
@@ -118,9 +94,6 @@
 			);
 			mainGroup = 466E47882F7F843C00EA2DE7;
 			minimizedProjectReferenceProxies = 1;
-			packageReferences = (
-				39B5742E2F8333AC00143229 /* XCRemoteSwiftPackageReference "swift-opus" */,
-			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 466E47922F7F843C00EA2DE7 /* Products */;
 			projectDirPath = "";
@@ -273,20 +246,16 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = G7W4KNX8SX;
+				DEVELOPMENT_TEAM = QV2W2LR83W;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
-				"HEADER_SEARCH_PATHS[arch=*]" = "$(BUILD_DIR)/../../SourcePackages/checkouts";
 				INFOPLIST_FILE = "Walkie-Talkie-Info.plist";
-				INFOPLIST_KEY_LSApplicationCategoryType = "";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "We need this to discover nearby walkie-talkie users.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "This app requires microphone access to send voice messages over the mesh network";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -312,8 +281,6 @@
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_OBJC_BRIDGING_HEADER = "Walkie Talkie/Walkie Talkie-Bridging-Header.h";
-				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -326,20 +293,16 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = G7W4KNX8SX;
+				DEVELOPMENT_TEAM = QV2W2LR83W;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
-				"HEADER_SEARCH_PATHS[arch=*]" = "$(BUILD_DIR)/../../SourcePackages/checkouts";
 				INFOPLIST_FILE = "Walkie-Talkie-Info.plist";
-				INFOPLIST_KEY_LSApplicationCategoryType = "";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "We need this to discover nearby walkie-talkie users.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "This app requires microphone access to send voice messages over the mesh network";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -365,7 +328,6 @@
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_OBJC_BRIDGING_HEADER = "Walkie Talkie/Walkie Talkie-Bridging-Header.h";
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -395,30 +357,6 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
-
-/* Begin XCRemoteSwiftPackageReference section */
-		39B5742E2F8333AC00143229 /* XCRemoteSwiftPackageReference "swift-opus" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/alta/swift-opus";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 0.0.2;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
-
-/* Begin XCSwiftPackageProductDependency section */
-		39B5742F2F8333AC00143229 /* Copus */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 39B5742E2F8333AC00143229 /* XCRemoteSwiftPackageReference "swift-opus" */;
-			productName = Copus;
-		};
-		39B574312F8333AC00143229 /* Opus */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 39B5742E2F8333AC00143229 /* XCRemoteSwiftPackageReference "swift-opus" */;
-			productName = Opus;
-		};
-/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 466E47892F7F843C00EA2DE7 /* Project object */;
 }

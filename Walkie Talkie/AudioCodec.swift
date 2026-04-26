@@ -1,40 +1,24 @@
-//
-//  AudioCodec.swift
-//  Walkie Talkie
-//
-//  Created by Nicole Li on 4/5/26.
-//
-//  Audio Processing Layer - Codec Abstraction
-//
-//  Provides a protocol for audio encoding/decoding
-//
 
 import AVFoundation
 import Opus
 
 
 protocol AudioCodec {
-    /// Encode a single PCM buffer into compressed bytes.
     func encode(pcmBuffer: AVAudioPCMBuffer) -> Data?
     
-    /// Decode compressed bytes back into a PCM buffer.
     func decode(compressedData: Data) -> AVAudioPCMBuffer?
 }
 
 
 enum AudioConstants {
-    /// 16 kHz mono — standard narrowband voice.
     static let sampleRate: Double = 16_000
     static let channels: AVAudioChannelCount = 1
     
-    /// 20 ms frame at 16 kHz = 320 samples.
     static let frameSamples: AVAudioFrameCount = 320
     static let frameDurationMs: UInt16 = 20
     
-    /// Opus target bitrate in bits/s (48 kbps is a good voice sweet-spot).
     static let opusBitrate: Int32 = 48_000
     
-    /// The canonical PCM format used everywhere in the audio pipeline.
     static var pcmFormat: AVAudioFormat {
         return AVAudioFormat(
             commonFormat: .pcmFormatFloat32,
@@ -126,16 +110,16 @@ final class OpusCodecWrapper: AudioCodec {
         
          let format = AudioConstants.pcmFormat
          guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(decodedSamples)) else { return nil }
-         buffer.frameLength = AVAudioFrameCount(decodedSamples)
+         buffer.frameLength =  AVAudioFrameCount(decodedSamples)
         
          let outFloat = buffer.floatChannelData![0]
-         for i in 0..<Int(decodedSamples) {
+         for i in 0..<Int(decodedSamples ) {
              outFloat[i] = Float(pcm16[i]) / Float(Int16.max)
          }
-        
+         
          return buffer
     }
-    
+     
     deinit {
          opus_encoder_destroy(encoder)
          opus_decoder_destroy(decoder)

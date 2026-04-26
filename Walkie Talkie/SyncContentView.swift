@@ -232,7 +232,7 @@ struct SyncContentView: View {
     }
 }
 
-// MARK: - Live Metric Cell
+
 
 private struct LiveMetricCell: View {
     let label: String

@@ -11,12 +11,12 @@ struct AsyncVoiceNote: Identifiable {
 
 private extension Color {
     static let wtBackground   = Color(red: 0.039, green: 0.039, blue: 0.059)
-    static let wtSurface      = Color(red: 0.075, green: 0.071, blue: 0.110)
-    static let wtBorder       = Color(red: 0.14,  green: 0.12,  blue: 0.22)
+    static let wtSurface     = Color(red: 0.075, green: 0.071, blue: 0.110)
+    static let wtBorder      = Color(red: 0.14,  green: 0.12,  blue: 0.22)
     static let wtPurple       = Color(red: 0.482, green: 0.184, blue: 0.969)
-    static let wtBlue         = Color(red: 0.102, green: 0.451, blue: 0.910)
+    static let wtBlue        = Color(red: 0.102, green: 0.451, blue: 0.910)
     static let wtGreen        = Color(red: 0.098, green: 0.863, blue: 0.510)
-    static let wtDimText      = Color.white.opacity(0.35)
+    static let wtDimText     = Color.white.opacity(0.35)
     static let wtFaintText    = Color.white.opacity(0.18)
 }
 
@@ -31,20 +31,20 @@ struct AsyncContentView: View {
     @StateObject private var networkManager = MeshRoutingEngine()
     @StateObject private var audioPipeline  = AsyncAudioEngine()
     @StateObject private var metrics = MetricsEngine()
-
+ 
     @State private var showingReport = false
-    @State private var isPoweredOn: Bool      = false
-    @State private var userName: String       = AsyncContentView.generateRandomCallsign()
-    @State private var isEditingName: Bool    = false
-    @State private var editNameTemp: String   = ""
+    @State private var isPoweredOn: Bool   = false
+    @State private var userName: String     = AsyncContentView.generateRandomCallsign()
+    @State private var isEditingName: Bool  = false
+    @State private var editNameTemp: String  = ""
 
-    @State private var hasMicPermission       = false
+    @State private var hasMicPermission    = false
     @State private var showingPermissionAlert = false
-    @State private var showDebugLogs          = false
+    @State private var showDebugLogs     = false
 
     @State private var inboxMessages: [AsyncVoiceNote] = []
-    @State private var playingMessageID: UUID? = nil
-    @State private var peersToIgnore: String = ""
+    @State private var playingMessageID: UUID? =nil
+    @State private var peersToIgnore: String =  ""
 
     static func generateRandomCallsign() -> String {
         let nouns = ["Falcon", "Wolf", "Hawk", "Bear", "Fox", "Raven", "Snake", "Echo"]
@@ -67,7 +67,7 @@ struct AsyncContentView: View {
                         connectionStatusBadge
 
                         if !isPoweredOn {
-                            TextField("Simulate distance: Ignore peers (e.g. Alice, Bob)", text: $peersToIgnore)
+                            TextField("Ignore certain users, to sim multihop", text: $peersToIgnore)
                                 .font(.system(size: 13))
                                 .padding(10)
                                 .background(Color.wtSurface)
@@ -105,16 +105,16 @@ struct AsyncContentView: View {
         }
         .onChange(of: audioPipeline.isPlaying) { isPlaying in
             if !isPlaying { playingMessageID = nil }
-        }
-        .alert("Microphone Access Needed", isPresented: $showingPermissionAlert) {
-            Button("Open Settings") {
+        }s
+        .alert("Mic access is needed to use the app", isPresented: $showingPermissionAlert) {
+            Button("Open Settings"){
                 if let url = URL(string: UIApplication.openSettingsURLString) {
                     UIApplication.shared.open(url)
                 }
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Please allow microphone access in Settings to use Push to Talk.")
+            Text("allow the app to use mic Please.")
         }
         .sheet(isPresented: $showingReport) {
             MetricsReportView(report: metrics.generateReport(), onReset: { metrics.reset() })
@@ -125,18 +125,18 @@ struct AsyncContentView: View {
         HStack {
             HStack(spacing: 8) {
                 Button {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
+                    withAnimation(.spring(response:0.35, dampingFraction:0.7)) {
                         isPoweredOn.toggle()
                         if isPoweredOn {
-                            networkManager.startMesh(withName: userName, ignoring: peersToIgnore)
+                            networkManager.startMesh(withName: userName,ignoring: peersToIgnore)
                         } else {
-                            networkManager.stopMesh()
+                             networkManager.stopMesh()
                         }
                     }
                 } label: {
                     ZStack {
                         Circle()
-                            .fill(isPoweredOn ? Color.wtGreen.opacity(0.18) : Color.red.opacity(0.18))
+                            .fill(isPoweredOn ? Color.wtGreen.opacity(0.18) :  Color.red.opacity(0.18))
                             .frame(width: 44, height: 44)
                         Image(systemName: "power")
                             .font(.system(size: 18, weight: .semibold))
@@ -445,8 +445,6 @@ struct AsyncContentView: View {
         }
     }
 }
-
-// MARK: - Async Metric Cell
 
 private struct AsyncMetricCell: View {
     let label: String

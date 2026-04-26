@@ -24,7 +24,6 @@ final class SyncAudioEngine: ObservableObject {
     private var playbackTimer: DispatchSourceTimer?
     private let playbackQueue = DispatchQueue(label: "com.walkietalkie.playback", qos: .userInteractive)
     
-    // NEW: The Batching Tray
     private var batchedFrames: [Data] = []
     private let framesPerBatch = 25
     private var emptyDrainCount = 0
@@ -198,7 +197,7 @@ final class SyncAudioEngine: ObservableObject {
         playbackTimer = nil
         DispatchQueue.main.async { self.isReceiving = false }
     }
-    
+     
     private func drainBuffersAndPlay() {
         var anyActive = false
         for (_, buffer) in jitterBuffers {
@@ -219,7 +218,7 @@ final class SyncAudioEngine: ObservableObject {
     
     private func jitterBufferFor(sender: String) -> JitterBuffer {
         if let existing = jitterBuffers[sender] { return existing }
-        let newBuffer = JitterBuffer(maxDepth: 10) // Deeper buffer for stability
+        let newBuffer = JitterBuffer(maxDepth: 10) // Deeper buffer for stability, we need that to fix sync issues
         jitterBuffers[sender] = newBuffer
         return newBuffer
     }

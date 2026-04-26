@@ -3,8 +3,6 @@ import Combine
 
 final class MetricsEngine: ObservableObject {
 
-    // MARK: - Data Types
-
     struct AudioRecord {
         let senderID: String
         let sequenceNumber: UInt32
@@ -22,7 +20,7 @@ final class MetricsEngine: ObservableObject {
 
     struct Report {
         let sessionDuration: TimeInterval
-        // Audio
+
         let audioPacketsSent: Int
         let audioPacketsReceived: Int
         let deliveryRate: Double
@@ -34,9 +32,9 @@ final class MetricsEngine: ObservableObject {
         let hopDistribution: [Int: Int]
         let avgLatencyByHop: [Int: Double]
         let hopSenderRows: [HopSenderRow]
-        // Text
+
         let textMessagesReceived: Int
-        // General
+
         let totalBytesReceived: Int
         let perSender: [String: SenderStats]
 
@@ -47,7 +45,7 @@ final class MetricsEngine: ObservableObject {
             let avgLatencyMs: Double
             let avgHopCount: Double
         }
-
+ 
         struct HopSenderRow: Identifiable {
             var id: String { "\(hopCount)-\(senderID)" }
             let hopCount: Int
@@ -55,29 +53,28 @@ final class MetricsEngine: ObservableObject {
             let packetCount: Int
             let avgLatencyMs: Double
         }
-
+ 
         var formattedDuration: String {
             let total = Int(sessionDuration)
             let mins = total / 60
             let secs = total % 60
-            return mins > 0 ? "\(mins)m \(secs)s" : "\(secs)s"
+            return mins > 0 ? "\(mins)m \(secs)s"  : "\(secs)s"
         }
     }
 
-    // MARK: - State
-
+    
+    
     @Published private(set) var audioReceived: [AudioRecord] = []
     @Published private(set) var textReceived: [TextRecord] = []
     @Published private(set) var audioSentCount: Int = 0
 
     private let sessionStart = Date()
 
-    // MARK: - Recording
 
     func recordAudioSent() {
         DispatchQueue.main.async { self.audioSentCount += 1 }
     }
-
+    
     func recordAudioReceived(packet: AudioPacket, hopCount: Int, bytes: Int) {
         let nowMs = UInt64(Date().timeIntervalSince1970 * 1000)
         let latencyMs = max(0.0, Double(nowMs) - Double(packet.timestamp))
@@ -89,15 +86,15 @@ final class MetricsEngine: ObservableObject {
             hopCount: hopCount,
             bytes: bytes
         )
-        DispatchQueue.main.async { self.audioReceived.append(record) }
+        DispatchQueue.main.async { self.audioReceived.append( record)}
     }
 
-    func recordAsyncAudioReceived(packet: AsyncAudioPacket, hopCount: Int, bytes: Int) {
+    func recordAsyncAudioReceived(packet: AsyncAudioPacket,hopCount: Int, bytes: Int) {
         let nowMs = UInt64(Date().timeIntervalSince1970 * 1000)
         let latencyMs = max(0.0, Double(nowMs) - Double(packet.timestamp))
         let record = AudioRecord(
             senderID: packet.senderID,
-            sequenceNumber: packet.totalSent - 1,
+            sequenceNumber: packet.totalSent-1,
             totalSent: packet.totalSent,
             latencyMs: latencyMs,
             hopCount: hopCount,
@@ -115,11 +112,10 @@ final class MetricsEngine: ObservableObject {
         DispatchQueue.main.async {
             self.audioReceived.removeAll()
             self.textReceived.removeAll()
-            self.audioSentCount = 0
+            self.audioSentCount =0
         }
     }
 
-    // MARK: - Report Generation
 
     func generateReport() -> Report {
         let duration = Date().timeIntervalSince(sessionStart)

@@ -217,7 +217,7 @@ struct AsyncContentView: View {
             Text(isPoweredOn
                  ? (!networkManager.connectedPeers.isEmpty
                     ? "Connected · \(networkManager.connectedPeers.count) peers"
-                    : "Searching for peers…")
+                    : "Searching for peers/")
                  : "Turn on to connect")
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(!networkManager.connectedPeers.isEmpty ? .wtGreen : .wtDimText)
@@ -276,7 +276,7 @@ struct AsyncContentView: View {
             }
             .frame(width: 130 + 3 * 28 + 10, height: 130 + 3 * 28 + 10)
 
-            Text(audioPipeline.isTransmitting ? "Recording... (Max 3s)" : (isPoweredOn ? "Push to Talk" : "Turn on to talk"))
+            Text(audioPipeline.isTransmitting ? "Recording now (Max 3s)" : (isPoweredOn ? "Push to Talk" : "Turn on to talk"))
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(isPoweredOn ? .wtDimText : .wtFaintText)
         }
@@ -381,7 +381,7 @@ struct AsyncContentView: View {
             .padding(.horizontal, 4)
 
             if inboxMessages.isEmpty {
-                Text("No voice notes yet...")
+                Text("No voice notes yet")
                     .font(.system(size: 13))
                     .foregroundColor(.wtDimText)
                     .frame(maxWidth: .infinity, alignment: .center)

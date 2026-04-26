@@ -201,7 +201,7 @@ extension MultipeerManager: MCSessionDelegate, MCNearbyServiceAdvertiserDelegate
                 }
                 
             case .connecting:
-                self.onDebugLog?("Layer 4: Handshaking with \(peerID.displayName)...")
+                self.onDebugLog?("Layer 4: Handshaking with \(peerID.displayName)")
             @unknown default: break
             }
         }

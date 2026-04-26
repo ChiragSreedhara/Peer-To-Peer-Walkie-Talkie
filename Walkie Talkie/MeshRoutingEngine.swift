@@ -37,18 +37,18 @@ class MeshRoutingEngine: ObservableObject {
         self.myName = name
         let ignoreArray = ignoring.split(separator: ",").map { String($0).trimmingCharacters(in: .whitespaces) }
         
-        log("Layer 3: Booting up Mesh Node as '\(name)'...")
+        log("Layer 3: Booting up as '\(name)'")
         transport.startNetworking(as: name, ignoring: ignoreArray)
     }
 
     func stopMesh() {
-        log("Layer 3: Shutting down Mesh Node...")
+        log("Layer 3: Shutting down user node")
         transport.stopNetworking()
         seenMessageIDs.removeAll()
     }
 
     func clearMesh() {
-        log("Layer 3: Clearing mesh state...")
+        log("Layer 3: clearing mesh")
         seenMessageIDs.removeAll()
         DispatchQueue.main.async {
             self.debugLogs.removeAll()

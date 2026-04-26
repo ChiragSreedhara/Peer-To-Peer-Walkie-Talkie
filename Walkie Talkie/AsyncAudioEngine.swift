@@ -44,7 +44,7 @@ final class AsyncAudioEngine: NSObject, ObservableObject, AVAudioPlayerDelegate,
                     
             DispatchQueue.main.async { self.isTransmitting = true }
             audioPlayer?.stop()
-            DispatchQueue.main.async { self.isPlaying =false }
+            DispatchQueue.main.async { self.isPlaying = false }
         } catch {
             print("AudioEngine couldnt start recording. The error is \(error)")
         }
@@ -62,7 +62,7 @@ final class AsyncAudioEngine: NSObject, ObservableObject, AVAudioPlayerDelegate,
 
         sentCount += 1
         let packet = AsyncAudioPacket(
-            timestamp: UInt64(Date().timeIntervalSince1970 *1000),
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
             senderID: UIDevice.current.name,
             totalSent: sentCount,
             audioData: audioData

@@ -81,7 +81,7 @@ class MeshRoutingEngine: ObservableObject {
     
     private func processIncomingBytes(_ data: Data, from immediateSender: String) {
             guard let packet = try? JSONDecoder().decode(MeshPacket.self, from: data) else {
-                log("Layer 3 Error: Failed to parse MeshPacket wrapper.")
+                log("Layer 3: issues with mesh packet")
                 return
             }
             
@@ -95,7 +95,7 @@ class MeshRoutingEngine: ObservableObject {
             if packet.targetID == nil || packet.targetID == self.myName {
                 onPayloadReceived?(packet.payload, packet.senderID, immediateSender, packet.targetID, hopCount)
             } else {
-                log("Layer 3: Packet targeted for \(packet.targetID!). I am just a middle-man. Skipping UI.")
+                log("Layer 3: Packet meant for \(packet.targetID!). Passing on and skipping unpacking")
             }
             
             var forwardedPacket = packet
@@ -104,7 +104,7 @@ class MeshRoutingEngine: ObservableObject {
             if forwardedPacket.ttl > 0 {
                 forwardToMesh(packet: forwardedPacket, excluding: immediateSender)
             } else {
-                log("Layer 3: Packet [\(shortID)] reached TTL limit. Dropping.")
+                log("Layer 3: Packet [\(shortID)] reached its TTL limit. Dropping pckt.")
             }
         }
             
@@ -120,13 +120,13 @@ class MeshRoutingEngine: ObservableObject {
             registerMessageSeen(newPacket.messageID)
             guard let rawData = try? JSONEncoder().encode(newPacket) else { return }
             
-            log("Layer 3: Originating new blast [\(newPacket.messageID.uuidString.prefix(4))] to \(target ?? "Everyone")")
+            log("Layer 3: Starting new blast [\(newPacket.messageID.uuidString.prefix(4))] to \(target ?? "everyone")")
             transport.broadcastToNeighbors(data: rawData)
         }
         
         private func forwardToMesh(packet: MeshPacket, excluding: String) {
             guard let rawData = try? JSONEncoder().encode(packet) else { return }
-            log("Layer 3: Forwarding [\(packet.messageID.uuidString.prefix(4))] -> TTL: \(packet.ttl) (Skipping \(excluding))")
+            log("Layer 3: Forwarding [\(packet.messageID.uuidString.prefix(4))] -> new TTL: \(packet.ttl) (skipping \(excluding))")
             transport.broadcastToNeighbors(data: rawData, excluding: excluding)
         }
     

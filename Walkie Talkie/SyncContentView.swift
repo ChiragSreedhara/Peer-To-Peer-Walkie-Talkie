@@ -324,7 +324,7 @@ struct SyncContentView: View {
         .alert(isPresented: $showingPermissionAlert) {
             Alert(
                 title: Text("Microphone Access Required"),
-                message: Text("Please enable microphone access in Settings to use the walkie-talkie."),
+                message: Text("Please enable mic access in Settings to use the walkie-talkie."),
                 dismissButton: .default(Text("OK"))
             )
         }

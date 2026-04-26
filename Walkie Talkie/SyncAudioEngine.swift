@@ -124,7 +124,7 @@ final class SyncAudioEngine: ObservableObject {
             audioPlayer?.stop()
             DispatchQueue.main.async { self.isPlaying = false }
         } catch {
-            print("AudioEngine: Failed to start recording - \(error)")
+            print("AudioPipeline: unable to capture — \(error)")
         }
     }
     

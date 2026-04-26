@@ -165,7 +165,7 @@ struct MetricsReportView: View {
     }
 
     private var clockNote: some View {
-        Text("Latency is measured as receive time minus the sender's embedded timestamp. Small clock differences between devices (typically <50ms on NTP-synced WiFi) may add a constant offset to all reported values.")
+        Text("Latency is receive time minus the sender's embedded timestamp")
             .font(.caption2)
             .foregroundColor(.secondary)
             .padding(.horizontal, 4)

@@ -43,7 +43,7 @@ struct AsyncContentView: View {
     @State private var showDebugLogs     = false
 
     @State private var inboxMessages: [AsyncVoiceNote] = []
-    @State private var playingMessageID: UUID? =nil
+    @State private var playingMessageID: UUID? = nil
     @State private var peersToIgnore: String =  ""
 
     static func generateRandomCallsign() -> String {
@@ -105,7 +105,7 @@ struct AsyncContentView: View {
         }
         .onChange(of: audioPipeline.isPlaying) { isPlaying in
             if !isPlaying { playingMessageID = nil }
-        }s
+        }
         .alert("Mic access is needed to use the app", isPresented: $showingPermissionAlert) {
             Button("Open Settings"){
                 if let url = URL(string: UIApplication.openSettingsURLString) {

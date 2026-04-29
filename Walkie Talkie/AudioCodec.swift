@@ -46,7 +46,7 @@ final class OpusCodecWrapper: AudioCodec {
              &encoderError
          )
          guard encoderError == OPUS_OK else {
-             fatalError("Opus encoder init failed: \(encoderError)")
+             fatalError("Opusfailed: \(encoderError)")
          }
          opus_encoder_set_bitrate(encoder!, AudioConstants.opusBitrate)
         
@@ -57,10 +57,9 @@ final class OpusCodecWrapper: AudioCodec {
              &decoderError
          )
          guard decoderError == OPUS_OK else {
-             fatalError("Opus decoder init failed: \(decoderError)")
+             fatalError("Opus failed: \(decoderError)")
          }
         
-        print("AudioCodec: OpusCodecWrapper initialized (link libopus to activate)")
     }
     
     func encode(pcmBuffer: AVAudioPCMBuffer) -> Data? {
@@ -102,7 +101,7 @@ final class OpusCodecWrapper: AudioCodec {
                  Int32(compressedData.count),
                  &pcm16,
                  frameSize,
-                 0  // no FEC
+                 0
              )
          }
         

@@ -15,7 +15,6 @@ struct MetricsReportView: View {
                     if !report.perSender.isEmpty { senderSection }
                     textSection
                     dataSection
-                    clockNote
                 }
                 .padding()
             }
@@ -164,12 +163,6 @@ struct MetricsReportView: View {
         }
     }
 
-    private var clockNote: some View {
-        Text("Latency is receive time minus the sender's embedded timestamp")
-            .font(.caption2)
-            .foregroundColor(.secondary)
-            .padding(.horizontal, 4)
-    }
 }
 
 

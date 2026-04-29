@@ -25,7 +25,7 @@ final class SyncAudioEngine: ObservableObject {
     private var batchedFrames: [Data] = []
     private let framesPerBatch = 25
     private var emptyDrainCount = 0
-    private let emptyDrainThreshold = 25 // 25 * 20ms = 500ms of silence before stopping
+    private let emptyDrainThreshold = 25
     
     init() {
         configureAudioSession()
@@ -98,9 +98,9 @@ final class SyncAudioEngine: ObservableObject {
                                 frameDurationMs: AudioConstants.frameDurationMs,
                                 senderID: UIDevice.current.name,
                                 totalSent: self.sequenceCounter,
-                                opusFrames: self.batchedFrames // Send the whole batch
+                                opusFrames: self.batchedFrames
                             )
-                            self.batchedFrames.removeAll() //empty the tray
+                            self.batchedFrames.removeAll()
                             
                             let serializedData = packet.serialize()
                             DispatchQueue.global(qos: .userInitiated).async {
@@ -124,7 +124,7 @@ final class SyncAudioEngine: ObservableObject {
             audioPlayer?.stop()
             DispatchQueue.main.async { self.isPlaying = false }
         } catch {
-            print("AudioPipeline: unable to capture — \(error)")
+            print("error: \(error)")
         }
     }
     
@@ -166,7 +166,7 @@ final class SyncAudioEngine: ObservableObject {
         do {
             try playbackEngine.start()
             playerNode.play()
-        } catch { print("AudioPipeline: Playback start failed — \(error)") }
+        } catch { print("error:  \(error)") }
     }
     
     private func startPlaybackTimerIfNeeded() {
@@ -206,7 +206,7 @@ final class SyncAudioEngine: ObservableObject {
     
     private func jitterBufferFor(sender: String) -> JitterBuffer {
         if let existing = jitterBuffers[sender] { return existing }
-        let newBuffer = JitterBuffer(maxDepth: 10) // Deeper buffer for stability, we need that to fix sync issues
+        let newBuffer = JitterBuffer(maxDepth: 10)
         jitterBuffers[sender] = newBuffer
         return newBuffer
     }

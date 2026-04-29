@@ -39,7 +39,7 @@ final class JitterBuffer {
                     if pendingPackets.count > maxDepth {
                         let lowestAvailable = pendingPackets.keys.min()!
                         nextPlaybackSeq = lowestAvailable
-                        print("JitterBuffer, gap issues, to fix now Jumping to packet \(lowestAvailable)")
+                        print("JitterBuffer, gap issues,  Jumping to packet \(lowestAvailable)")
                     }
                     return nil
                 }

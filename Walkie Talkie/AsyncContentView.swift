@@ -276,7 +276,7 @@ struct AsyncContentView: View {
             }
             .frame(width: 130 + 3 * 28 + 10, height: 130 + 3 * 28 + 10)
 
-            Text(audioPipeline.isTransmitting ? "Recording now (Max 3s)" : (isPoweredOn ? "Push to Talk" : "Turn on to talk"))
+            Text(audioPipeline.isTransmitting ? "Recording  (Max 3s)" : (isPoweredOn ? "Push to Talk" : "Turn on to talk"))
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(isPoweredOn ? .wtDimText : .wtFaintText)
         }
@@ -290,9 +290,9 @@ struct AsyncContentView: View {
                 HStack(spacing: 6) {
                     Image(systemName: "terminal")
                         .font(.system(size: 11))
-                    Text("System / Testing Logs")
+                    Text(" Logs")
                         .font(.system(size: 12))
-                    Image(systemName: "chevron.down")
+                    Image(systemName: "arrow.down")
                         .font(.system(size: 10))
                         .rotationEffect(.degrees(showDebugLogs ? 180 : 0))
                 }
@@ -360,7 +360,7 @@ struct AsyncContentView: View {
             .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.wtBorder, lineWidth: 1))
 
             Button(action: { showingReport = true }) {
-                Label("Session Report", systemImage: "chart.bar.doc.horizontal")
+                Label("Session Report")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(.wtPurple)
                     .frame(maxWidth: .infinity)
@@ -381,7 +381,7 @@ struct AsyncContentView: View {
             .padding(.horizontal, 4)
 
             if inboxMessages.isEmpty {
-                Text("No voice notes yet")
+                Text("No voice notes")
                     .font(.system(size: 13))
                     .foregroundColor(.wtDimText)
                     .frame(maxWidth: .infinity, alignment: .center)

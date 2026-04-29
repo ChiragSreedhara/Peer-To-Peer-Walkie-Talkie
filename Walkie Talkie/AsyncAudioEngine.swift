@@ -46,7 +46,7 @@ final class AsyncAudioEngine: NSObject, ObservableObject, AVAudioPlayerDelegate,
             audioPlayer?.stop()
             DispatchQueue.main.async { self.isPlaying = false }
         } catch {
-            print("AudioEngine couldnt start recording. The error is \(error)")
+            print("error \(error)")
         }
     }
     
@@ -88,9 +88,9 @@ final class AsyncAudioEngine: NSObject, ObservableObject, AVAudioPlayerDelegate,
             audioPlayer?.prepareToPlay()
             audioPlayer?.play()
             
-            DispatchQueue.main.async { self.isPlaying =true }
+            DispatchQueue.main.async { self.isPlaying = true }
         } catch {
-            print("AudioEngine: Failed to play voice note - \(error)")
+            print("failed voice note - \(error)")
         }
     }
     

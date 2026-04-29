@@ -78,13 +78,7 @@ final class MetricsEngine: ObservableObject {
     func recordAudioReceived(packet: AudioPacket, hopCount: Int, bytes: Int) {
         let nowMs = UInt64(Date().timeIntervalSince1970 * 1000)
         let latencyMs = max(0.0, Double(nowMs) - Double(packet.timestamp))
-        let record = AudioRecord(
-            senderID: packet.senderID,
-            sequenceNumber: packet.sequenceNumber,
-            totalSent: packet.totalSent,
-            latencyMs: latencyMs,
-            hopCount: hopCount,
-            bytes: bytes
+        let record = AudioRecord(senderID: packet.senderID, sequenceNumber: packet.sequenceNumber, totalSent: packet.totalSent, latencyMs: latencyMs,hopCount: hopCount,bytes: bytes
         )
         DispatchQueue.main.async { self.audioReceived.append( record)}
     }
@@ -92,13 +86,7 @@ final class MetricsEngine: ObservableObject {
     func recordAsyncAudioReceived(packet: AsyncAudioPacket,hopCount: Int, bytes: Int) {
         let nowMs = UInt64(Date().timeIntervalSince1970 * 1000)
         let latencyMs = max(0.0, Double(nowMs) - Double(packet.timestamp))
-        let record = AudioRecord(
-            senderID: packet.senderID,
-            sequenceNumber: packet.totalSent-1,
-            totalSent: packet.totalSent,
-            latencyMs: latencyMs,
-            hopCount: hopCount,
-            bytes: bytes
+        let record = AudioRecord( senderID: packet.senderID, sequenceNumber: packet.totalSent-1, totalSent: packet.totalSent, latencyMs: latencyMs, hopCount: hopCount,     bytes: bytes
         )
         DispatchQueue.main.async { self.audioReceived.append(record) }
     }
@@ -147,9 +135,7 @@ final class MetricsEngine: ObservableObject {
         for (hop, senders) in hopSenderBuckets {
             for (sender, lats) in senders {
                 hopSenderRows.append(Report.HopSenderRow(
-                    hopCount: hop,
-                    senderID: sender,
-                    packetCount: lats.count,
+                    hopCount: hop, senderID: sender,packetCount: lats.count,
                     avgLatencyMs: lats.reduce(0, +) / Double(lats.count)
                 ))
             }
@@ -175,11 +161,7 @@ final class MetricsEngine: ObservableObject {
             totalExpected += expected
             totalReceived += recs.count
             perSender[id] = Report.SenderStats(
-                packetsReceived: recs.count,
-                packetsExpected: expected,
-                deliveryRate: expected > 0 ? min(1.0, Double(recs.count) / Double(expected)) : 0.0,
-                avgLatencyMs: lats.isEmpty ? 0 : lats.reduce(0, +) / Double(lats.count),
-                avgHopCount: Double(recs.map(\.hopCount).reduce(0, +)) / Double(recs.count)
+                packetsReceived: recs.count, packetsExpected: expected, deliveryRate: expected > 0 ? min(1.0, Double(recs.count) / Double(expected)) : 0.0, avgLatencyMs: lats.isEmpty ? 0 : lats.reduce(0, +) / Double(lats.count), avgHopCount: Double(recs.map(\.hopCount).reduce(0, +)) / Double(recs.count)
             )
         }
         let deliveryRate = totalExpected > 0 ? min(1.0, Double(totalReceived) / Double(totalExpected)) : 0.0
@@ -187,21 +169,7 @@ final class MetricsEngine: ObservableObject {
         let totalBytes = audioReceived.map(\.bytes).reduce(0, +) + textReceived.map(\.bytes).reduce(0, +)
 
         return Report(
-            sessionDuration: duration,
-            audioPacketsSent: audioSentCount,
-            audioPacketsReceived: audioReceived.count,
-            deliveryRate: deliveryRate,
-            avgLatencyMs: avgLatency,
-            minLatencyMs: minLatency,
-            maxLatencyMs: maxLatency,
-            jitterMs: jitter,
-            avgHopCount: avgHopCount,
-            hopDistribution: hopDist,
-            avgLatencyByHop: avgLatByHop,
-            hopSenderRows: hopSenderRows,
-            textMessagesReceived: textReceived.count,
-            totalBytesReceived: totalBytes,
-            perSender: perSender
+            sessionDuration: duration, audioPacketsSent: audioSentCount, audioPacketsReceived: audioReceived.count, deliveryRate: deliveryRate,avgLatencyMs: avgLatency,minLatencyMs: minLatency, maxLatencyMs: maxLatency, jitterMs: jitter, avgHopCount: avgHopCount, hopDistribution: hopDist, avgLatencyByHop: avgLatByHop, hopSenderRows: hopSenderRows, textMessagesReceived: textReceived.count, totalBytesReceived: totalBytes, perSender: perSender
         )
     }
 }

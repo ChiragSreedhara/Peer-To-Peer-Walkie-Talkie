@@ -65,15 +65,15 @@ struct SyncContentView: View {
                 playingMessageID = nil
             }
         }
-        .alert("Microphone Access Needed", isPresented: $showingPermissionAlert) {
-            Button("Open Settings") {
+        .alert("Mic Access Needed", isPresented: $showingPermissionAlert) {
+            Button(" Settings") {
                 if let url = URL(string: UIApplication.openSettingsURLString) {
                     UIApplication.shared.open(url)
                 }
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Please allow microphone access in Settings to use Push to Talk.")
+            Text("Allow mic access")
         }
     }
 
@@ -92,7 +92,7 @@ struct SyncContentView: View {
                     .padding(.horizontal)
                 } else {
                     VStack {
-                        Text("Operating as: \(userName)")
+                        Text("Name: \(userName)")
                             .font(.headline)
                             .foregroundColor(.green)
                         if !peersToIgnore.isEmpty {
@@ -101,7 +101,7 @@ struct SyncContentView: View {
                                 .foregroundColor(.red)
                         }
                         HStack(spacing: 12) {
-                            Button("Clear Mesh") {
+                            Button("Clear") {
                                 networkManager.clearMesh()
                             }
                             .buttonStyle(.bordered)
@@ -190,9 +190,9 @@ struct SyncContentView: View {
 
             Text(isPoweredOn
                  ? (!networkManager.connectedPeers.isEmpty
-                    ? "Connected · \(networkManager.connectedPeers.count) peers"
-                    : "Searching for peers…")
-                 : "Turn on to connect")
+                    ? " \(networkManager.connectedPeers.count) peers"
+                    : "Searching")
+                 : "turn on")
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(!networkManager.connectedPeers.isEmpty ? .wtGreen : .wtDimText)
         }
@@ -248,7 +248,7 @@ struct SyncContentView: View {
                     .cornerRadius(10)
 
                     Button(action: { showingReport = true }) {
-                        Label("Session Report", systemImage: "chart.bar.doc.horizontal")
+                        Label(" Report", systemImage: "chart.bar.doc.horizontal")
                             .font(.subheadline)
                             .frame(maxWidth: .infinity)
                     }
@@ -257,7 +257,7 @@ struct SyncContentView: View {
                 .padding(.horizontal)
 
                 VStack(alignment: .leading) {
-                    Text("System Logs:")
+                    Text(" Logs:")
                         .font(.caption)
                         .bold()
                     
@@ -279,7 +279,7 @@ struct SyncContentView: View {
                 .padding(.horizontal)
                 
                 VStack(spacing: 8) {
-                    Text(audioPipeline.isTransmitting ? "Release to stop" : "Hold to talk")
+                    Text(audioPipeline.isTransmitting ? "Release to stop" : "press to talk")
                         .font(.caption)
                         .foregroundColor(.secondary)
                     
@@ -323,8 +323,8 @@ struct SyncContentView: View {
         }
         .alert(isPresented: $showingPermissionAlert) {
             Alert(
-                title: Text("Microphone Access Required"),
-                message: Text("Please enable mic access in Settings to use the walkie-talkie."),
+                title: Text("Need mic access"),
+                message: Text(" enable mic access "),
                 dismissButton: .default(Text("OK"))
             )
         }
